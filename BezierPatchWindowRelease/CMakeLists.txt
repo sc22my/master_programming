@@ -32,3 +32,9 @@ target_link_libraries(
     OpenMP::OpenMP_CXX
     cwmathlib
 )
+
+# Set where the exe should be put
+install(
+    TARGETS BezierPatchWindowRelease
+    RUNTIME DESTINATION bin
+)
