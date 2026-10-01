@@ -21,8 +21,7 @@
 class Point3;
 
 // the class - we will rely on POD for sending to GPU
-class Vector3
-    { // Vector3
+class Vector3 {
     public:
     // the coordinates
     float x, y, z;

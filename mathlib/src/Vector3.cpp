@@ -24,18 +24,17 @@ Vector3::Vector3(const Vector3 &other)
     {}
     
 // equality operator
-bool Vector3::operator ==(const Vector3 &other) const
-    { // Vector3::operator ==()
+bool Vector3::operator ==(const Vector3 &other) const {
     return (abs(x - other.x) < std::numeric_limits<float>::epsilon() && abs(y - other.y) < std::numeric_limits<float>::epsilon() && abs(z - other.z) < std::numeric_limits<float>::epsilon());
-    } // Vector3::operator ==()
+}
 
 // addition operator
 Vector3 Vector3::operator +(const Vector3 &other) const {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = (*this)[i] + other[i];
-    }
+    returnVal.x = x + other.x;
+    returnVal.y = y - other.y;
+    returnVal.z = z - other.z;
 
     return returnVal;
 }
@@ -44,9 +43,9 @@ Vector3 Vector3::operator +(const Vector3 &other) const {
 Vector3 Vector3::operator -(const Vector3 &other) const {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = (*this)[i] - other[i];
-    }
+    returnVal.x = x - other.x;
+    returnVal.y = y - other.y;
+    returnVal.z = z - other.z;
 
     return returnVal;
 }
@@ -55,9 +54,9 @@ Vector3 Vector3::operator -(const Vector3 &other) const {
 Vector3 Vector3::operator *(float factor) const {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = (*this)[i] * factor;
-    }
+    returnVal.x *= factor;
+    returnVal.y *= factor;
+    returnVal.z *= factor;
 
     return returnVal;
 }
@@ -66,9 +65,12 @@ Vector3 Vector3::operator *(float factor) const {
 Vector3 Vector3::operator /(float factor) const {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = (*this)[i] / factor;
-    }
+    // Divide once
+    float r = 1/factor;
+
+    returnVal.x *= r;
+    returnVal.y *= r;
+    returnVal.z *= r;
 
     return returnVal;
 }
@@ -82,9 +84,9 @@ float Vector3::dot(const Vector3 &other) const {
 Vector3 Vector3::cross(const Vector3 &other) const {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = ((*this)[i] * other[(i + 1) % 3]) - ((*this)[(i + 1) % 3] * other[i]);
-    }
+    returnVal.x = (y * other.z) - (z * other.y);
+    returnVal.y = (z * other.x) - (x * other.z);
+    returnVal.z = (x * other.y) - (y * other.x);
 
     return returnVal;
 }
@@ -149,9 +151,9 @@ const float &Vector3::operator [] (const int index) const
 Point3 operator +(const Point3 &left, const Vector3 &right) {
     Point3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = left[i] + right[i];
-    }
+    returnVal.x = left.x + right.x;
+    returnVal.y = left.y + right.y;
+    returnVal.z = left.z + right.z;
 
     return returnVal;
 }
@@ -160,9 +162,9 @@ Point3 operator +(const Point3 &left, const Vector3 &right) {
 Vector3 operator -(const Point3 &left, const Point3 &right) {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = left[i] + right[i];
-    }
+    returnVal.x = left.x - right.x;
+    returnVal.y = left.y - right.y;
+    returnVal.z = left.z - right.z;
 
     return returnVal;
 }
