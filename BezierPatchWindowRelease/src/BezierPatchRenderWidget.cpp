@@ -81,26 +81,20 @@ void BezierPatchRenderWidget::resizeGL(int w, int h)
 
 
 // called every time the widget needs painting
-void BezierPatchRenderWidget::paintGL()
-{ // BezierPatchRenderWidget::paintGL()
-
-    // TODO:
-    // To match the OpenGL widget, refer to "RenderWidget.{h/cpp}.
-    // There you shall find the precise colours, positions, etc.
-    // No additional OpenGL calls should be added here for drawing.
-    // Make use of the renderParameters matrices for converting
-    //  points from local coordinates to screen space.
-    // The final screen space coordinates (row/column) should then be used
-    //  to set the 2D frameBuffer array with the final colour.
-    // (glDrawPixels then puts the frameBuffer on the screen
-    //   to display the final image at the end of paintGL)
-
+void BezierPatchRenderWidget::paintGL() {
     // clear the (non-OpenGL) buffer where we will set pixels to:
     frameBuffer.clear(renderParameters->theClearColor);
 
     // now clear the OpenGL buffer:
     glClearColor(0.8, 0.8, 0.6, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    // Test random ting
+    for (int i = 0; i < 100; i++) {
+        for (int j = 0; j < 100; j++) {
+            frameBuffer[i][j] = RGBAValue(255.f, 0.f, 255.f, 255.f);
+        }
+    }
 
     Matrix4 identity_matrix;
     identity_matrix.SetIdentity();

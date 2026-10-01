@@ -110,42 +110,38 @@ Vector3 Vector3::unit() const {
 }
 
 // operator that allows us to use array indexing instead of variable names
-float &Vector3::operator [] (const int index)
-    { // operator []
+float &Vector3::operator [] (const int index) {
     // use default to catch out of range indices
     // we could throw an exception, but will just return the 0th element instead
-    switch (index)
-        { // switch on index
-        case 0:
-            return x;
-        case 1:
-            return y;
-        case 2:
-            return z;
-        // actually the error case
-        default:
-            return x;       
-        } // switch on index
-    } // operator []
+    switch (index) {
+    case 0:
+        return x;
+    case 1:
+        return y;
+    case 2:
+        return z;
+    // actually the error case
+    default:
+        return x;       
+    }
+}
 
 // operator that allows us to use array indexing instead of variable names
-const float &Vector3::operator [] (const int index) const
-    { // operator []
+const float &Vector3::operator [] (const int index) const {
     // use default to catch out of range indices
     // we could throw an exception, but will just return the 0th element instead
-    switch (index)
-        { // switch on index
-        case 0:
-            return x;
-        case 1:
-            return y;
-        case 2:
-            return z;
-        // actually the error case
-        default:
-            return x;       
-        } // switch on index
-    } // operator []
+    switch (index) {
+    case 0:
+        return x;
+    case 1:
+        return y;
+    case 2:
+        return z;
+    // actually the error case
+    default:
+        return x;       
+    }
+}
 
 // addition operator (Point + Vector is valid, but not the other way round)
 Point3 operator +(const Point3 &left, const Vector3 &right) {
@@ -175,17 +171,15 @@ Vector3 operator *(float factor, const Vector3 &right) {
 }
 
 // stream input
-std::istream & operator >> (std::istream &inStream, Vector3 &value)
-    { // stream output
+std::istream & operator >> (std::istream &inStream, Vector3 &value) {
     inStream >> value.x >> value.y >> value.z;
     return inStream;
-    } // stream output
+}
         
 // stream output
-std::ostream & operator << (std::ostream &outStream, const Vector3 &value)
-    { // stream output
+std::ostream & operator << (std::ostream &outStream, const Vector3 &value) {
     outStream << std::setprecision(4) << value.x << " " << std::setprecision(4) << value.y << " " << std::setprecision(4) << value.z;
     return outStream;
-    } // stream output
+}
 
         
