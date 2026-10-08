@@ -56,7 +56,7 @@ BezierPatchRenderWidget::BezierPatchRenderWidget (
     CalculateProjectionOrtho(1, 1, 1, 1, 1, 1);
 
     // Allocate space for point cache
-    m_TransformedPts = std::vector<Homogeneous4>(patchControlPoints->vertices.size());
+    m_Scratchpad = std::vector<Homogeneous4>(m_ScratchpadSize);
 }
 
 void BezierPatchRenderWidget::forceRepaint(){
@@ -136,14 +136,14 @@ void BezierPatchRenderWidget::paintGL() {
         hom.w = 1;
 
         // Project
-        m_TransformedPts[i] = MVP * hom;
+        m_Scratchpad[i] = MVP * hom;
     }
 
     // Render
     if(renderParameters->verticesEnabled) {
-        for(int i = 0 ; i < m_TransformedPts.size(); i++) {
+        for(int i = 0 ; i < m_Scratchpad.size(); i++) {
             // Clip point
-            Homogeneous4 pt = m_TransformedPts[i];
+            Homogeneous4 pt = m_Scratchpad[i];
 
             if (pt.x < -1 || pt.x > 1) continue;
             if (pt.y < -1 || pt.y > 1) continue;
@@ -274,4 +274,29 @@ void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, 
 
     // Set w to 1
     m_Projection[3][3] = 1;
+}
+
+void BezierPatchRenderWidget::DrawPoints(Point3* points, unsigned int numpts) {
+    // Stage 0: Primitive assembly: Nothing to do, each point is a primitive
+
+    // "Vertex shader": project points. will use numpts of scratchpad space
+    // TODO: parallelise
+    for (int i = 0; i < numpts; i++) {
+        // in hom4
+        Homogeneous4 hom(points[i]);
+
+        // Project
+        hom = m_MVP * hom;
+
+        // out hom4
+        m_Scratchpad[i] = hom;
+    }
+    // Scratchpad head: numpts
+
+    // Clip agains clip space
+    for (int i = 0; i < numpts; i++) {
+        if (m_Scratchpad[i].x < -1 || m_Scratchpad[i].x > 1)
+    }
+
+    // Scratchpad head: numpts
 }

@@ -75,17 +75,36 @@ private:
 private:
     void forceRepaint();
 
-    // ======== STATE ========
+	// Scratchpad of points.
+    std::vector<Homogeneous4> m_Scratchpad;
 
-    // Our projection matrix
+    // ======== STATE ========
+	// Or our "uniforms"
+
+    // Projection matrix
     Matrix4 m_Projection;
 
-    // Cached projected points in NDC
-    std::vector<Homogeneous4> m_TransformedPts;
+	// Model view projection
+	Matrix4 m_MVP;
+
+	// Scratchpad size. Should fit nicely into 80kb per core of l1 cache on lab i7 12700
+	const unsigned int m_ScratchpadSize = 2048;
 
 	// Sets the projection matrix to ortho.
 	// Arguments behave same as glOrtho()
     void CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far);
+
+	// ======== DRAWING PRIMITIVES ========
+	// Doesnt use an index buffer
+
+	// Draws points from a buffer
+	void DrawPoints(Point3* points, unsigned int numpts);
+
+	// Draws lines from a buffer. lines arranged as [l0p0, l0p1, l1p0, l1p1, ...]
+	void DrawLines(Point3* points, unsigned int numlines);
+
+	// Draws triangles from a list of points. 3 consecutive points make a triangle
+	void DrawTris(Point3* points, unsigned int numtris);
 signals:
 	// these are general purpose signals, which scale the drag to 
 	// the notional unit sphere and pass it to the controller for handling
