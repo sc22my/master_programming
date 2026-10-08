@@ -58,7 +58,7 @@ Homogeneous4 Matrix4::operator *(const Homogeneous4 &vector) const {
     Homogeneous4 productVector;
 
     for (int row = 0; row < 4; row++) {
-        int sum = 0;
+        float sum = 0;
 
         for (int i = 0; i < 4; i++) {
             sum += vector[i] * coordinates[row][i];

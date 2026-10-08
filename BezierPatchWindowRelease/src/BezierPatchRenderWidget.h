@@ -32,10 +32,9 @@
 
 
 // class for a render widget with arcball linked to an external arcball widget
-class BezierPatchRenderWidget : public QOpenGLWidget
-    { // class BezierPatchRenderWidget
+class BezierPatchRenderWidget : public QOpenGLWidget {
 	Q_OBJECT
-	private:	
+private:
     // the Bezier patch control points to be rendered
     ControlPoints *patchControlPoints;
 
@@ -73,19 +72,27 @@ class BezierPatchRenderWidget : public QOpenGLWidget
 	virtual void mousePressEvent(QMouseEvent *event);
 	virtual void mouseMoveEvent(QMouseEvent *event);
 	virtual void mouseReleaseEvent(QMouseEvent *event);
-
-    private:
-
+private:
     void forceRepaint();
 
-	signals:
+    // ======== STATE ========
+
+    // Our projection matrix
+    Matrix4 m_Projection;
+
+    // Cached projected points in NDC
+    std::vector<Homogeneous4> m_TransformedPts;
+
+	// Sets the projection matrix to ortho.
+	// Arguments behave same as glOrtho()
+    void CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far);
+signals:
 	// these are general purpose signals, which scale the drag to 
 	// the notional unit sphere and pass it to the controller for handling
 	void BeginScaledDrag(int whichButton, float x, float y);
 	// note that Continue & End assume the button has already been set
 	void ContinueScaledDrag(float x, float y);
 	void EndScaledDrag(float x, float y);
-
-    }; // class BezierPatchRenderWidget
+};
 
 #endif

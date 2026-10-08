@@ -129,9 +129,13 @@ void RenderWidget::resizeGL(int w, int h)
     {
         if(renderParameters->orthoProjection)
         {
-            glOrtho(-aspectRatio * 10/renderParameters->zTranslate, aspectRatio * 10/renderParameters->zTranslate,
-                    -10/renderParameters->zTranslate, 10/renderParameters->zTranslate,
-                    0.01, 200.0);
+            glOrtho(
+                -aspectRatio * 10/renderParameters->zTranslate,
+                aspectRatio * 10/renderParameters->zTranslate,
+                -10/renderParameters->zTranslate,
+                10/renderParameters->zTranslate,
+                0.01,
+                200.0);
         }
         else
         {
