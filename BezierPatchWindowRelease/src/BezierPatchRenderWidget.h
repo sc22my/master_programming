@@ -27,6 +27,9 @@
 
 // and include all of our own headers that we need
 #include "ControlPoints.h"
+#include "Homogeneous4.h"
+#include "Point3.h"
+#include "RGBAValue.h"
 #include "RenderParameters.h"
 #include "RGBAImage.h"
 
@@ -105,8 +108,16 @@ private:
 	// Draws lines from a buffer. lines arranged as [l0p0, l0p1, l1p0, l1p1, ...]
 	void DrawLines(Point3* points, unsigned int numlines);
 
-	// Draws triangles from a list of points. 3 consecutive points make a triangle
-	void DrawTris(Point3* points, unsigned int numtris);
+	// ======== UTIL FUNCTIONS ========
+
+	// Clip a line agains an axial plane.
+	// returns if the line is outside the plane
+	// overwrites the points if clipped
+	bool ClipAxial(Homogeneous4* points, int axis, float d);
+
+	// Vertical and horisontal bresenham
+	void DrawBresenhamVert(int x0, int y0, int x1, int y1, RGBAValue color);
+	void DrawBresenhamHoriz(int x0, int y0, int x1, int y1, RGBAValue color);
 signals:
 	// these are general purpose signals, which scale the drag to 
 	// the notional unit sphere and pass it to the controller for handling

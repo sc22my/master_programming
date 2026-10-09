@@ -6,6 +6,7 @@
 ////////////////////////////////////////////////////////////////////////
 
 
+#include <limits>
 #include <math.h>
 #include <thread>
 #include <random>
@@ -26,8 +27,12 @@
 
 //	Ken Shoemake's ArcBall
 #include "ArcBall.h"
+#include "Homogeneous4.h"
 
 #define N_THREADS 16
+
+// shortcuts. TODO: move to mathlib
+#define LERP(p1, p2, t) (t*p1) + ((1-t)*p2) 
 
 // constructor
 BezierPatchRenderWidget::BezierPatchRenderWidget (
@@ -117,13 +122,6 @@ void BezierPatchRenderWidget::paintGL() {
     glClearColor(0.8, 0.8, 0.6, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-
-    for (int i = 0; i < 100; i++) {
-        for (int j = 0; j < 100; j++) {
-            frameBuffer[i][j] = RGBAValue(255.f, 255.f, 255.f, 255.f);
-        }
-    }
-
     // Set model view matrix. TEMP: ortho only
     renderParameters->modelviewMatrix = renderParameters->rotationMatrix;
 
@@ -135,8 +133,9 @@ void BezierPatchRenderWidget::paintGL() {
         DrawPoints(patchControlPoints->vertices.data(), patchControlPoints->vertices.size());
     }
 
+    std::vector<Point3> linepts = { Point3(-1, 0, 0), Point3(1, 0, 0) };
     if(renderParameters->planesEnabled) {
-
+        DrawLines(linepts.data(), 1);
         // Planes are axis aligned grids made up of lines
 
         // Draw the vertical x axis plane (in purple)
@@ -282,6 +281,127 @@ void BezierPatchRenderWidget::DrawPoints(Point3* points, unsigned int numpts) {
                 if (d <= r2)
                     frameBuffer[y][x] = RGBAValue(255.f, 255.f, 255.f, 255.f);
             }
+        }
+    }
+}
+
+void BezierPatchRenderWidget::DrawLines(Point3* points, unsigned int numlines) {
+    // Project points
+    for (int i = 0; i < numlines << 1; i += 2) {
+        Homogeneous4 hom(points[i]);
+        hom.w = 1;
+
+        hom = m_MVP * hom;
+
+        m_Scratchpad[i] = hom;
+    }
+
+    // Clip lines agains ndc bounds
+    for (int i = 0; i < numlines << 1; i += 2) {
+        Homogeneous4 line[2] = { m_Scratchpad[i], m_Scratchpad[i+1] };
+
+        // Clip against axes. TODO: maybe unroll
+        for (int axis = 0; axis < 3; axis++) {
+            ClipAxial(line, axis, 1);
+            ClipAxial(line, axis, -1);
+        }
+
+        // Convert into pixel space
+        int p0fbx = (line[0].x + 1) * 0.5 * frameBuffer.width;
+        int p0fby = (line[0].y + 1) * 0.5 * frameBuffer.height;
+        int p1fbx = (line[1].x + 1) * 0.5 * frameBuffer.width;
+        int p1fby = (line[1].y + 1) * 0.5 * frameBuffer.height;
+
+        // Use bresenham's algorithm to draw the line
+        if (std::abs(p1fby - p0fby) < std::abs(p1fbx - p0fbx)) {
+            if (p0fbx < p1fbx)
+                DrawBresenhamHoriz(p0fbx, p0fby, p1fbx, p1fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+            else
+                DrawBresenhamHoriz(p1fbx, p1fby, p0fbx, p0fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+        } else {
+            if (p0fby < p1fby)
+                DrawBresenhamVert(p0fbx, p0fby, p1fbx, p1fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+            else
+                DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+        }
+    }
+}
+
+bool BezierPatchRenderWidget::ClipAxial(Homogeneous4* points, int axis, float d) {
+    // distances of points to clip plane
+    // and which side it is on
+    // diff: distance between pts on axis
+    float d1, d2, side, diff;
+
+    d1 = points[0][axis] - d;
+    d2 = points[1][axis] - 1;
+    side = d1 * d2;
+    diff = d2 - d1;
+
+    // Discard outside
+    if (side > 0 && d1 < 0) return true;
+
+    // Clip if necessarry by using lerp
+    if (side < 0) {
+        Homogeneous4 newpt = LERP(points[0], points[1], d1/diff);
+
+        if (d1 < 0) {
+            points[0] = newpt;
+        } else {
+            points[1] = newpt;
+        }
+
+        return true;
+    } else {
+        // Line fully inside plane, no need to clip
+        return false;
+    }
+}
+
+void BezierPatchRenderWidget::DrawBresenhamHoriz(int x0, int y0, int x1, int y1, RGBAValue color) {
+    int dx = x1 - x0;
+    int dy = y1 - y0;
+
+    int dir = 1;
+    if (dy < 0) {
+        dir = -1;
+        dy = -dy;
+    }
+
+    int D = (2 * dy) - dx;
+    int y = y0;
+    for (int x = x0; x < x1; x++) {
+        frameBuffer[y][x] = color;
+
+        if (D > 0) {
+            y = y + dir;
+            D = D + (2 * (dy - dx));
+        } else {
+            D = D + 2*dy;
+        }
+    }
+}
+
+void BezierPatchRenderWidget::DrawBresenhamVert(int x0, int y0, int x1, int y1, RGBAValue color) {
+    int dx = x1 - x0;
+    int dy = y1 - y0;
+
+    int dir = 1;
+    if (dx < 0) {
+        dir = -1;
+        dx = -dx;
+    }
+
+    int D = (2 * dx) - dy;
+    int x = x0;
+    for (int y = y0; y < y1; y++) {
+        frameBuffer[y][x] = color;
+
+        if (D > 0) {
+            x = x + dir;
+            D = D + (2 * (dx - dy));
+        } else {
+            D = D + 2*dx;
         }
     }
 }
