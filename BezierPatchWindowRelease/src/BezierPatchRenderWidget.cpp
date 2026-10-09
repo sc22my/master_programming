@@ -60,8 +60,8 @@ BezierPatchRenderWidget::BezierPatchRenderWidget (
     // Initialise projection matrix with default value
     CalculateProjectionOrtho(1, 1, 1, 1, 1, 1);
 
-    // Allocate space for point cache
-    m_Scratchpad = std::vector<Homogeneous4>(m_ScratchpadSize);
+    // Allocate buffers
+    AllocateBuffers();
 }
 
 void BezierPatchRenderWidget::forceRepaint(){
@@ -128,14 +128,51 @@ void BezierPatchRenderWidget::paintGL() {
     // Calculate MVP matrix
     m_MVP = m_Projection * renderParameters->modelviewMatrix;
 
-    // Render points
-    if(renderParameters->verticesEnabled) {
-        DrawPoints(patchControlPoints->vertices.data(), patchControlPoints->vertices.size());
+    // Project control points
+    for (int i = 0; i < patchControlPoints->vertices.size(); i++) {
+        Homogeneous4 pt = patchControlPoints->vertices[i];
+        pt.w = 1;
+        m_ProjectedPts[i] = m_MVP * pt;
     }
 
-    std::vector<Point3> linepts = { Point3(-1, 0, 0), Point3(1, 0, 0) };
+    // Create lines for patch
+    int count = 0;
+    for (int y = 0; y < 4; y++) {
+        m_PatchLines[count + 0] = m_ProjectedPts[(y*4) + 0];
+        m_PatchLines[count + 1] = m_ProjectedPts[(y*4) + 1];
+        m_PatchLines[count + 2] = m_ProjectedPts[(y*4) + 1];
+        m_PatchLines[count + 3] = m_ProjectedPts[(y*4) + 2];
+        m_PatchLines[count + 4] = m_ProjectedPts[(y*4) + 2];
+        m_PatchLines[count + 5] = m_ProjectedPts[(y*4) + 3];
+        count += 6;
+    }
+
+    for (int x = 0; x < 4; x++) {
+        m_PatchLines[count + 0] = m_ProjectedPts[0  + x];
+        m_PatchLines[count + 1] = m_ProjectedPts[4  + x];
+        m_PatchLines[count + 2] = m_ProjectedPts[4  + x];
+        m_PatchLines[count + 3] = m_ProjectedPts[8  + x];
+        m_PatchLines[count + 4] = m_ProjectedPts[8  + x];
+        m_PatchLines[count + 5] = m_ProjectedPts[12 + x];
+        count += 6;
+    }
+
+    // Render points
+    if(renderParameters->verticesEnabled) {
+        // Draw inactive colour first
+        DrawPoints(
+            m_ProjectedPts.data(),
+            m_ProjectedPts.size(),
+            RGBAValue(191.f, 191.f, 191.f, 255.f));
+
+        // Draw over the points. TODO: test for speedup without overdraw
+        DrawPoints(
+            m_ProjectedPts.data() + renderParameters->activeVertex,
+            1,
+            RGBAValue(255.f, 0.f, 0.f, 255.f));
+    }
+
     if(renderParameters->planesEnabled) {
-        DrawLines(linepts.data(), 1);
         // Planes are axis aligned grids made up of lines
 
         // Draw the vertical x axis plane (in purple)
@@ -148,10 +185,11 @@ void BezierPatchRenderWidget::paintGL() {
 
     }
 
-    if(renderParameters->netEnabled)
-    {// UI control for showing the Bezier control net
-     // (control points connected with lines)
-    }// UI control for showing the Bezier control net
+    if(renderParameters->netEnabled) {
+        DrawLines(m_PatchLines.data(),
+            m_PatchLines.size() / 2,
+            RGBAValue(200.f, 200.f, 200.f, 255.f));
+    }
 
 
     if(renderParameters->bezierEnabled) {
@@ -244,17 +282,24 @@ void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, 
     m_Projection[3][3] = 1;
 }
 
-void BezierPatchRenderWidget::DrawPoints(Point3* points, unsigned int numpts) {
+void BezierPatchRenderWidget::AllocateBuffers() {
+    // Allocate space for control points
+    m_ProjectedPts = std::vector<Homogeneous4>(patchControlPoints->vertices.size());
+
+    // Allocate enough for 3 grids
+    m_GridLines = std::vector<Homogeneous4>(m_LinesPerGrid * 3);
+
+    // lines connecting 4x4 points on 2 axes
+    m_PatchLines = std::vector<Homogeneous4>(24 * 2);
+}
+
+void BezierPatchRenderWidget::DrawPoints(Homogeneous4* points, unsigned int numpts, RGBAValue color) {
     int ptsizehalf = m_PointSize << 1;
 
     // TODO: parallelise
     for (int i = 0; i < numpts; i++) {
-        Homogeneous4 pt(points[i]);
-        pt.w = 1;
-
-        // Project
-        pt = m_MVP * pt;
-
+        Homogeneous4 pt = points[i];
+    
         // Clip against ndc bounds
         if (pt.x < -1 || pt.x > 1) continue;
         if (pt.y < -1 || pt.y > 1) continue;
@@ -279,64 +324,52 @@ void BezierPatchRenderWidget::DrawPoints(Point3* points, unsigned int numpts) {
 
                 int d = (dy * dy) + (dx * dx);
                 if (d <= r2)
-                    frameBuffer[y][x] = RGBAValue(255.f, 255.f, 255.f, 255.f);
+                    frameBuffer[y][x] = color;
             }
         }
     }
 }
 
-void BezierPatchRenderWidget::DrawLines(Point3* points, unsigned int numlines) {
-    // Project points
-    for (int i = 0; i < numlines << 1; i += 2) {
-        Homogeneous4 hom(points[i]);
-        hom.w = 1;
-
-        hom = m_MVP * hom;
-
-        m_Scratchpad[i] = hom;
-    }
-
+void BezierPatchRenderWidget::DrawLines(Homogeneous4* points, unsigned int numlines, RGBAValue color) {
     // Clip lines agains ndc bounds
     for (int i = 0; i < numlines << 1; i += 2) {
-        Homogeneous4 line[2] = { m_Scratchpad[i], m_Scratchpad[i+1] };
-
         // Clip against axes. TODO: maybe unroll
         for (int axis = 0; axis < 3; axis++) {
-            ClipAxial(line, axis, 1);
-            ClipAxial(line, axis, -1);
+            ClipAxial(points + i, axis, 1, 1);
+            ClipAxial(points + i, axis, -1, -1);
         }
 
         // Convert into pixel space
-        int p0fbx = (line[0].x + 1) * 0.5 * frameBuffer.width;
-        int p0fby = (line[0].y + 1) * 0.5 * frameBuffer.height;
-        int p1fbx = (line[1].x + 1) * 0.5 * frameBuffer.width;
-        int p1fby = (line[1].y + 1) * 0.5 * frameBuffer.height;
+        int p0fbx = ((points + i + 0)->x + 1) * 0.5 * frameBuffer.width;
+        int p0fby = ((points + i + 0)->y + 1) * 0.5 * frameBuffer.height;
+        int p1fbx = ((points + i + 1)->x + 1) * 0.5 * frameBuffer.width;
+        int p1fby = ((points + i + 1)->y + 1) * 0.5 * frameBuffer.height;
 
         // Use bresenham's algorithm to draw the line
         if (std::abs(p1fby - p0fby) < std::abs(p1fbx - p0fbx)) {
             if (p0fbx < p1fbx)
-                DrawBresenhamHoriz(p0fbx, p0fby, p1fbx, p1fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+                DrawBresenhamHoriz(p0fbx, p0fby, p1fbx, p1fby, color);
             else
-                DrawBresenhamHoriz(p1fbx, p1fby, p0fbx, p0fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+                DrawBresenhamHoriz(p1fbx, p1fby, p0fbx, p0fby, color);
         } else {
             if (p0fby < p1fby)
-                DrawBresenhamVert(p0fbx, p0fby, p1fbx, p1fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+                DrawBresenhamVert(p0fbx, p0fby, p1fbx, p1fby, color);
             else
-                DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, RGBAValue(255.f, 0.f, 0.f, 255.f));
+                DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, color);
         }
     }
 }
 
-bool BezierPatchRenderWidget::ClipAxial(Homogeneous4* points, int axis, float d) {
+bool BezierPatchRenderWidget::ClipAxial(Homogeneous4* points, int axis, float d, int inside) {
     // distances of points to clip plane
     // and which side it is on
     // diff: distance between pts on axis
     float d1, d2, side, diff;
 
-    d1 = points[0][axis] - d;
-    d2 = points[1][axis] - 1;
+    d1 = (points[0][axis] - d) * inside;
+    d2 = (points[1][axis] - d) * inside;
     side = d1 * d2;
-    diff = d2 - d1;
+    diff = d1 - d2;
 
     // Discard outside
     if (side > 0 && d1 < 0) return true;
@@ -351,7 +384,7 @@ bool BezierPatchRenderWidget::ClipAxial(Homogeneous4* points, int axis, float d)
             points[1] = newpt;
         }
 
-        return true;
+        return false;
     } else {
         // Line fully inside plane, no need to clip
         return false;

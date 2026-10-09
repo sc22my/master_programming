@@ -78,8 +78,24 @@ private:
 private:
     void forceRepaint();
 
-	// Scratchpad of points.
-    std::vector<Homogeneous4> m_Scratchpad;
+	// Sets the projection matrix to ortho.
+	// Arguments behave same as glOrtho()
+    void CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far);
+
+	// Allocates buffers for points lines etc
+	void AllocateBuffers();
+
+	// Lines per axis grid
+	const unsigned int m_LinesPerGrid = 10;
+
+	// Holds projected points
+	std::vector<Homogeneous4> m_ProjectedPts;
+
+	// Holds grid line points
+	std::vector<Homogeneous4> m_GridLines;
+
+	// Holds lines connecting control points
+	std::vector<Homogeneous4> m_PatchLines;
 
     // ======== STATE ========
 	// Or our "uniforms"
@@ -92,28 +108,22 @@ private:
 
 	unsigned int m_PointSize = 3;
 
-	// Scratchpad size. Should fit nicely into 80kb per core of l1 cache on lab i7 12700
-	const unsigned int m_ScratchpadSize = 2048;
-
-	// Sets the projection matrix to ortho.
-	// Arguments behave same as glOrtho()
-    void CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far);
-
 	// ======== DRAWING PRIMITIVES ========
 	// Doesnt use an index buffer
 
 	// Draws points from a buffer
-	void DrawPoints(Point3* points, unsigned int numpts);
+	void DrawPoints(Homogeneous4* points, unsigned int numpts, RGBAValue color);
 
 	// Draws lines from a buffer. lines arranged as [l0p0, l0p1, l1p0, l1p1, ...]
-	void DrawLines(Point3* points, unsigned int numlines);
+	void DrawLines(Homogeneous4* points, unsigned int numlines, RGBAValue color);
 
 	// ======== UTIL FUNCTIONS ========
 
 	// Clip a line agains an axial plane.
 	// returns if the line is outside the plane
 	// overwrites the points if clipped
-	bool ClipAxial(Homogeneous4* points, int axis, float d);
+	// inside is which side of the plane. value of 1 is inside, -1 is outside
+	bool ClipAxial(Homogeneous4* points, int axis, float d, int inside);
 
 	// Vertical and horisontal bresenham
 	void DrawBresenhamVert(int x0, int y0, int x1, int y1, RGBAValue color);
