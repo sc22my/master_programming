@@ -117,48 +117,23 @@ void BezierPatchRenderWidget::paintGL() {
     glClearColor(0.8, 0.8, 0.6, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    Matrix4 identity;
-    identity.SetIdentity();
+
+    for (int i = 0; i < 100; i++) {
+        for (int j = 0; j < 100; j++) {
+            frameBuffer[i][j] = RGBAValue(255.f, 255.f, 255.f, 255.f);
+        }
+    }
 
     // Set model view matrix. TEMP: ortho only
     renderParameters->modelviewMatrix = renderParameters->rotationMatrix;
 
-    // ======== BEGIN RENDER POINTS ========
-
     // Calculate MVP matrix
-    Matrix4 MVP = m_Projection * renderParameters->modelviewMatrix;
+    m_MVP = m_Projection * renderParameters->modelviewMatrix;
 
-    // Calculate points in NDC. We will re-use these pts
-    for (int i = 0; i < patchControlPoints->vertices.size(); i++) {
-        Homogeneous4 hom(patchControlPoints->vertices[i]);
-
-        // Set w to 1 because this is a point
-        hom.w = 1;
-
-        // Project
-        m_Scratchpad[i] = MVP * hom;
-    }
-
-    // Render
+    // Render points
     if(renderParameters->verticesEnabled) {
-        for(int i = 0 ; i < m_Scratchpad.size(); i++) {
-            // Clip point
-            Homogeneous4 pt = m_Scratchpad[i];
-
-            if (pt.x < -1 || pt.x > 1) continue;
-            if (pt.y < -1 || pt.y > 1) continue;
-            if (pt.z < -1 || pt.z > 1) continue;
-
-            // Convert into framebuffer coordinates
-            int fbx = (pt.x + 1) * 0.5 * frameBuffer.width;
-            int fby = (pt.y + 1) * 0.5 * frameBuffer.height;
-
-            // Set pixel
-            frameBuffer[fby][fbx] = RGBAValue(255.f, 255.f, 255.f, 255.f);
-        }
+        DrawPoints(patchControlPoints->vertices.data(), patchControlPoints->vertices.size());
     }
-
-    // ======== END RENDER POINTS ========
 
     if(renderParameters->planesEnabled) {
 
@@ -180,22 +155,16 @@ void BezierPatchRenderWidget::paintGL() {
     }// UI control for showing the Bezier control net
 
 
-    if(renderParameters->bezierEnabled)
-    {// UI control for showing the Bezier curve
-        for (float s = 0.0; s <= 1.0; s += 0.01)
-        {// s parameter loop
+    if(renderParameters->bezierEnabled) {
+        for (float s = 0.0; s <= 1.0; s += 0.01) {
+            for (float t = 0.0; t <= 1.0; t += 0.01) {
 
-            for (float t = 0.0; t <= 1.0; t += 0.01)
-            { // t parameter loop
-
-                // set the pixel for this parameter value using s, t for colour
-            } // t parameter loop
-        } // s parameter loop
+            }
+        }
     }
 
     // Put the custom framebufer on the screen to display the image
     glDrawPixels(frameBuffer.width, frameBuffer.height, GL_RGBA, GL_UNSIGNED_BYTE, frameBuffer.block);
-
 }
 
 // mouse-handling
@@ -277,26 +246,42 @@ void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, 
 }
 
 void BezierPatchRenderWidget::DrawPoints(Point3* points, unsigned int numpts) {
-    // Stage 0: Primitive assembly: Nothing to do, each point is a primitive
+    int ptsizehalf = m_PointSize << 1;
 
-    // "Vertex shader": project points. will use numpts of scratchpad space
     // TODO: parallelise
     for (int i = 0; i < numpts; i++) {
-        // in hom4
-        Homogeneous4 hom(points[i]);
+        Homogeneous4 pt(points[i]);
+        pt.w = 1;
 
         // Project
-        hom = m_MVP * hom;
+        pt = m_MVP * pt;
 
-        // out hom4
-        m_Scratchpad[i] = hom;
+        // Clip against ndc bounds
+        if (pt.x < -1 || pt.x > 1) continue;
+        if (pt.y < -1 || pt.y > 1) continue;
+        if (pt.z < -1 || pt.z > 1) continue;
+
+        // Get pixel space coords
+        long fbx = (pt.x + 1) * 0.5 * frameBuffer.width;
+        long fby = (pt.y + 1) * 0.5 * frameBuffer.height;
+
+        // Fill in point
+        long startx = std::max(fbx - ptsizehalf, 0l);
+        long starty = std::max(fby - ptsizehalf, 0l);
+        int endx = std::min(fbx + ptsizehalf, frameBuffer.width);
+        int endy = std::min(fby + ptsizehalf, frameBuffer.height);
+
+        int r2 = ptsizehalf * ptsizehalf;
+        for (long y = starty; y < endy; y++) {
+            for (long x = startx; x < endx; x++) {
+                // Check circle radius
+                int dy = y - fby;
+                int dx = x - fbx;
+
+                int d = (dy * dy) + (dx * dx);
+                if (d <= r2)
+                    frameBuffer[y][x] = RGBAValue(255.f, 255.f, 255.f, 255.f);
+            }
+        }
     }
-    // Scratchpad head: numpts
-
-    // Clip agains clip space
-    for (int i = 0; i < numpts; i++) {
-        if (m_Scratchpad[i].x < -1 || m_Scratchpad[i].x > 1)
-    }
-
-    // Scratchpad head: numpts
 }

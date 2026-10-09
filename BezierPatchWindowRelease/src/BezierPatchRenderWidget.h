@@ -87,6 +87,8 @@ private:
 	// Model view projection
 	Matrix4 m_MVP;
 
+	unsigned int m_PointSize = 3;
+
 	// Scratchpad size. Should fit nicely into 80kb per core of l1 cache on lab i7 12700
 	const unsigned int m_ScratchpadSize = 2048;
 
