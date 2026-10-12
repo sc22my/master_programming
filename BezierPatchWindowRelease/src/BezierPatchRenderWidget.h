@@ -34,6 +34,23 @@
 #include "RGBAImage.h"
 
 
+// TODO: Move to own file
+// Structure of arrays implementation of vertex data.
+// For this project, we are only interested in position and data
+struct VertexQueue {
+	VertexQueue() {
+		// Reserve a large space for pts
+		Positions.reserve(2048);
+		Colors.reserve(2048);
+	}
+
+	std::vector<Homogeneous4> Positions;
+	std::vector<RGBAValue> Colors;
+
+	inline void Clear() { Positions.clear(); Colors.clear(); }
+};
+
+
 // class for a render widget with arcball linked to an external arcball widget
 class BezierPatchRenderWidget : public QOpenGLWidget {
 	Q_OBJECT
@@ -85,14 +102,20 @@ private:
 	// Allocates buffers for points lines etc
 	void AllocateBuffers();
 
-	// Lines per axis grid
-	const unsigned int m_LinesPerGrid = 10;
+	// ======== BUFFERS ========
 
 	// Holds projected points
 	std::vector<Homogeneous4> m_ProjectedPts;
 
+	// Grid points projected
+	std::vector<Homogeneous4> m_GridPointsX;
+	std::vector<Homogeneous4> m_GridPointsY;
+	std::vector<Homogeneous4> m_GridPointsZ;
+
 	// Holds grid line points
-	std::vector<Homogeneous4> m_GridLines;
+	std::vector<Homogeneous4> m_GridLinesX;
+	std::vector<Homogeneous4> m_GridLinesY;
+	std::vector<Homogeneous4> m_GridLinesZ;
 
 	// Holds lines connecting control points
 	std::vector<Homogeneous4> m_PatchLines;
@@ -108,16 +131,38 @@ private:
 
 	unsigned int m_PointSize = 3;
 
+	// ======== QUEUES ========
+	// We use a queue system to batch draw all points
+
+	// Clears the queues for recording
+	void ClearQueues();
+
+	// Queues a point to be drawn
+	inline void QueuePoint(Homogeneous4 pos, RGBAValue color) { m_PointQueue.Positions.push_back(pos); m_PointQueue.Colors.push_back(color); };
+
+	// Queues a line with points p1 and p2
+	void QueueLine(Homogeneous4 p1, Homogeneous4 p2, RGBAValue c1, RGBAValue c2);
+
+	// The queue that holds our points
+	VertexQueue m_PointQueue;
+
+	// The queue that holds our lines
+	VertexQueue m_LineQueue;
+
 	// ======== DRAWING PRIMITIVES ========
-	// Doesnt use an index buffer
 
 	// Draws points from a buffer
-	void DrawPoints(Homogeneous4* points, unsigned int numpts, RGBAValue color);
+	void DrawPoints();
 
 	// Draws lines from a buffer. lines arranged as [l0p0, l0p1, l1p0, l1p1, ...]
-	void DrawLines(Homogeneous4* points, unsigned int numlines, RGBAValue color);
+	void DrawLines();
 
 	// ======== UTIL FUNCTIONS ========
+
+	// Projects a grid of points on the axis.
+	// Buffer needs to be large enough to hold (numpts+1) ** 2 points
+	// Puts points row column major
+	void ProjectGridPoints(Homogeneous4* buff, unsigned int numpts, float size, unsigned int axis);
 
 	// Clip a line agains an axial plane.
 	// returns if the line is outside the plane

@@ -29,6 +29,9 @@
 #include "ArcBall.h"
 #include "Homogeneous4.h"
 
+// Math library includes
+#include "Sort.h"
+
 #define N_THREADS 16
 
 // shortcuts. TODO: move to mathlib
@@ -62,6 +65,16 @@ BezierPatchRenderWidget::BezierPatchRenderWidget (
 
     // Allocate buffers
     AllocateBuffers();
+
+    // TEMP: test quick sort works
+    std::vector<float> nums = { 1, 5, 4, 3, -1, 10 };
+    std::vector<int> ids = { 0, 1, 2, 3, 4, 5 };
+    QuickSort::Sort(nums, [] (float value) { return value; }, ids);
+
+    std::cout << "Sorted numbers: " << std::endl;
+    for (int i = 0; i < nums.size(); i++) {
+        std::cout << "i: " << i << ", num: " << nums[i] << ", id: " << ids[i] << std::endl;
+    }
 }
 
 void BezierPatchRenderWidget::forceRepaint(){
@@ -122,11 +135,16 @@ void BezierPatchRenderWidget::paintGL() {
     glClearColor(0.8, 0.8, 0.6, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Set model view matrix. TEMP: ortho only
-    renderParameters->modelviewMatrix = renderParameters->rotationMatrix;
+    // Set model view matrix. Translate the camera back by reverse of 10 units
+    Matrix4 cameratranslation;
+    cameratranslation.SetTranslation(Vector3(0, 0, -10));
+    renderParameters->modelviewMatrix = cameratranslation * renderParameters->rotationMatrix;
 
     // Calculate MVP matrix
     m_MVP = m_Projection * renderParameters->modelviewMatrix;
+
+    // Clear the render queue
+    ClearQueues();
 
     // Project control points
     for (int i = 0; i < patchControlPoints->vertices.size(); i++) {
@@ -160,35 +178,30 @@ void BezierPatchRenderWidget::paintGL() {
     // Render points
     if(renderParameters->verticesEnabled) {
         // Draw inactive colour first
-        DrawPoints(
-            m_ProjectedPts.data(),
-            m_ProjectedPts.size(),
-            RGBAValue(191.f, 191.f, 191.f, 255.f));
-
-        // Draw over the points. TODO: test for speedup without overdraw
-        DrawPoints(
-            m_ProjectedPts.data() + renderParameters->activeVertex,
-            1,
-            RGBAValue(255.f, 0.f, 0.f, 255.f));
+        for (unsigned int i = 0; i < m_ProjectedPts.size(); i++) {
+            if (i == renderParameters->activeVertex)
+                QueuePoint(m_ProjectedPts[i], RGBAValue(255.f, 0.f, 0.f, 255.f));
+            else
+                QueuePoint(m_ProjectedPts[i], RGBAValue(191.f, 191.f, 191.f, 255.f));
+        }
     }
 
     if(renderParameters->planesEnabled) {
-        // Planes are axis aligned grids made up of lines
+        // Project grid points
+        ProjectGridPoints(m_GridPointsX.data(), 5 , 10.f, 0);
+        ProjectGridPoints(m_GridPointsY.data(), 5 , 10.f, 1);
+        ProjectGridPoints(m_GridPointsZ.data(), 10, 10.f, 2);
 
-        // Draw the vertical x axis plane (in purple)
-
-        // Draw the vertical y axis plane (in blue)
-
-        // Draw the flat plane (in brown)
-
-        // Refer to RenderWidget.cpp for the precise colours.
-
+        // DrawLines(m_GridLinesX.data(), count - 1, RGBAValue(255.f, 0, 0, 255.f));
+        // DrawPoints(m_GridPointsX.data(), m_GridPointsX.size(), RGBAValue(255.f, 0.f, 0.f, 255.f));
+        // DrawPoints(m_GridPointsY.data(), m_GridPointsY.size(), RGBAValue(0.f, 255.f, 0.f, 255.f));
+        // DrawPoints(m_GridPointsZ.data(), m_GridPointsZ.size(), RGBAValue(0.f, 0.f, 255.f, 255.f));
     }
 
     if(renderParameters->netEnabled) {
-        DrawLines(m_PatchLines.data(),
-            m_PatchLines.size() / 2,
-            RGBAValue(200.f, 200.f, 200.f, 255.f));
+        // DrawLines(m_PatchLines.data(),
+        //     m_PatchLines.size() / 2,
+        //     RGBAValue(200.f, 200.f, 200.f, 255.f));
     }
 
 
@@ -199,6 +212,10 @@ void BezierPatchRenderWidget::paintGL() {
             }
         }
     }
+
+    // Render the queues
+    DrawPoints();
+    DrawLines();
 
     // Put the custom framebufer on the screen to display the image
     glDrawPixels(frameBuffer.width, frameBuffer.height, GL_RGBA, GL_UNSIGNED_BYTE, frameBuffer.block);
@@ -259,7 +276,7 @@ void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, 
 
     float rangex = right - left;
     float rangey = top - bottom;
-    float rangez = near - far;
+    float rangez = far - near;
 
     // Inverses
     float rangexinv = 1.f / rangex;
@@ -268,15 +285,15 @@ void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, 
 
     // X component
     m_Projection[0][0] = 2 * rangexinv;
-    m_Projection[3][0] = -(right + left) * rangexinv;
+    m_Projection[0][3] = -(right + left) * rangexinv;
 
     // Y component
     m_Projection[1][1] = 2 * rangeyinv;
-    m_Projection[3][1] = -(top + bottom) * rangeyinv;
+    m_Projection[1][3] = -(top + bottom) * rangeyinv;
 
-    // Z component
-    m_Projection[2][2] = 2 * rangezinv;
-    m_Projection[3][2] = -(near + far) * rangezinv;
+    // Z component, negative because camera faces -z
+    m_Projection[2][2] = -2 * rangezinv;
+    m_Projection[2][3] = -(near + far) * rangezinv;
 
     // Set w to 1
     m_Projection[3][3] = 1;
@@ -286,19 +303,39 @@ void BezierPatchRenderWidget::AllocateBuffers() {
     // Allocate space for control points
     m_ProjectedPts = std::vector<Homogeneous4>(patchControlPoints->vertices.size());
 
-    // Allocate enough for 3 grids
-    m_GridLines = std::vector<Homogeneous4>(m_LinesPerGrid * 3);
+    // Allocate grid points
+    m_GridPointsX = std::vector<Homogeneous4>(36);  // 6x6 grid
+    m_GridPointsY = std::vector<Homogeneous4>(36);  // 6x6 grid
+    m_GridPointsZ = std::vector<Homogeneous4>(121); // 11x11 grid
+
+    // Allocate grid lines
+    m_GridLinesX = std::vector<Homogeneous4>(2048); // TODO: set correct size
+    m_GridLinesY = std::vector<Homogeneous4>(2048); // TODO: set correct size
+    m_GridLinesZ = std::vector<Homogeneous4>(2048); // TODO: set correct size
 
     // lines connecting 4x4 points on 2 axes
     m_PatchLines = std::vector<Homogeneous4>(24 * 2);
 }
 
-void BezierPatchRenderWidget::DrawPoints(Homogeneous4* points, unsigned int numpts, RGBAValue color) {
+void BezierPatchRenderWidget::ClearQueues() {
+    m_PointQueue.Clear();
+    m_LineQueue.Clear();
+}
+
+void BezierPatchRenderWidget::DrawPoints() {
     int ptsizehalf = m_PointSize << 1;
 
+    // Apply homogenious part
+    for (auto& pt : m_PointQueue.Positions) {
+        if (std::abs(pt.w) > std::numeric_limits<float>::epsilon()) pt = pt / pt.w;
+    }
+
+    // Sort by depth
+    QuickSort::Sort(m_PointQueue.Positions, [] (Homogeneous4& value) { return -value.z; }, m_PointQueue.Colors);
+
     // TODO: parallelise
-    for (int i = 0; i < numpts; i++) {
-        Homogeneous4 pt = points[i];
+    for (int i = 0; i < m_PointQueue.Positions.size(); i++) {
+        Homogeneous4 pt = m_PointQueue.Positions[i];
     
         // Clip against ndc bounds
         if (pt.x < -1 || pt.x > 1) continue;
@@ -324,38 +361,64 @@ void BezierPatchRenderWidget::DrawPoints(Homogeneous4* points, unsigned int nump
 
                 int d = (dy * dy) + (dx * dx);
                 if (d <= r2)
-                    frameBuffer[y][x] = color;
+                    frameBuffer[y][x] = m_PointQueue.Colors[i];
             }
         }
     }
 }
 
-void BezierPatchRenderWidget::DrawLines(Homogeneous4* points, unsigned int numlines, RGBAValue color) {
+void BezierPatchRenderWidget::DrawLines() {
     // Clip lines agains ndc bounds
-    for (int i = 0; i < numlines << 1; i += 2) {
-        // Clip against axes. TODO: maybe unroll
-        for (int axis = 0; axis < 3; axis++) {
-            ClipAxial(points + i, axis, 1, 1);
-            ClipAxial(points + i, axis, -1, -1);
-        }
+    // for (int i = 0; i < numlines << 1; i += 2) {
+    //     // Clip against axes. TODO: maybe unroll
+    //     for (int axis = 0; axis < 3; axis++) {
+    //         ClipAxial(points + i, axis, 1, 1);
+    //         ClipAxial(points + i, axis, -1, -1);
+    //     }
 
-        // Convert into pixel space
-        int p0fbx = ((points + i + 0)->x + 1) * 0.5 * frameBuffer.width;
-        int p0fby = ((points + i + 0)->y + 1) * 0.5 * frameBuffer.height;
-        int p1fbx = ((points + i + 1)->x + 1) * 0.5 * frameBuffer.width;
-        int p1fby = ((points + i + 1)->y + 1) * 0.5 * frameBuffer.height;
+    //     // Convert into pixel space
+    //     int p0fbx = ((points + i + 0)->x + 1) * 0.5 * frameBuffer.width;
+    //     int p0fby = ((points + i + 0)->y + 1) * 0.5 * frameBuffer.height;
+    //     int p1fbx = ((points + i + 1)->x + 1) * 0.5 * frameBuffer.width;
+    //     int p1fby = ((points + i + 1)->y + 1) * 0.5 * frameBuffer.height;
 
-        // Use bresenham's algorithm to draw the line
-        if (std::abs(p1fby - p0fby) < std::abs(p1fbx - p0fbx)) {
-            if (p0fbx < p1fbx)
-                DrawBresenhamHoriz(p0fbx, p0fby, p1fbx, p1fby, color);
-            else
-                DrawBresenhamHoriz(p1fbx, p1fby, p0fbx, p0fby, color);
-        } else {
-            if (p0fby < p1fby)
-                DrawBresenhamVert(p0fbx, p0fby, p1fbx, p1fby, color);
-            else
-                DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, color);
+    //     // Use bresenham's algorithm to draw the line
+    //     if (std::abs(p1fby - p0fby) < std::abs(p1fbx - p0fbx)) {
+    //         if (p0fbx < p1fbx)
+    //             DrawBresenhamHoriz(p0fbx, p0fby, p1fbx, p1fby, color);
+    //         else
+    //             DrawBresenhamHoriz(p1fbx, p1fby, p0fbx, p0fby, color);
+    //     } else {
+    //         if (p0fby < p1fby)
+    //             DrawBresenhamVert(p0fbx, p0fby, p1fbx, p1fby, color);
+    //         else
+    //             DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, color);
+    //     }
+    // }
+}
+
+void BezierPatchRenderWidget::ProjectGridPoints(Homogeneous4* buff, unsigned int numpts, float size, unsigned int axis) {
+    float step = size / numpts;
+    float start = -size/2;
+
+    // which axes to write into
+    unsigned int i1 = axis == 0 ? 1 : 0;
+    unsigned int i2 = axis == 2 ? 1 : 2;
+
+    // Loop through rows and columns inclusive
+    int count = 0;
+    for (int row = 0; row <= numpts; row++) {
+        for (int column = 0; column <= numpts; column++) {
+            float rowpos = start + (row * step);
+            float colpos = start + (column * step);
+
+            // Set correct points
+            Homogeneous4 pos(0.f, 0.f, 0.f, 1.f);
+            pos[i1] = rowpos;
+            pos[i2] = colpos;
+
+            buff[count] = m_MVP * pos;
+            count++;
         }
     }
 }
@@ -383,6 +446,8 @@ bool BezierPatchRenderWidget::ClipAxial(Homogeneous4* points, int axis, float d,
         } else {
             points[1] = newpt;
         }
+
+        std::cout << "d1: " << d1 << " d2: " << d2 << std::endl;
 
         return false;
     } else {

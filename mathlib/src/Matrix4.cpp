@@ -147,9 +147,9 @@ void Matrix4::SetTranslation(const Vector3 &vector) {
     // start with an identity matrix
     SetIdentity();
 
-    coordinates[3][0] = vector[0];
-    coordinates[3][1] = vector[1];
-    coordinates[3][2] = vector[2];
+    coordinates[0][3] = vector[0];
+    coordinates[1][3] = vector[1];
+    coordinates[2][3] = vector[2];
 }
 
 void Matrix4::SetScale(float xScale, float yScale, float zScale) {
