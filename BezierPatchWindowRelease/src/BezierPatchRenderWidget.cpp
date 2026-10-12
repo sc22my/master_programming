@@ -281,8 +281,16 @@ void BezierPatchRenderWidget::paintGL() {
 
     if(renderParameters->bezierEnabled) {
         for (float s = 0.0; s <= 1.0; s += 0.01) {
-            for (float t = 0.0; t <= 1.0; t += 0.01) {
+            // Evaluate control points
+            std::array<Homogeneous4, 4> ctrl;
+            for (int i = 0; i < 4; i++) {
+                ctrl[i] = EvaluateBezier({ m_ProjectedPts[0 + i], m_ProjectedPts[4 + i], m_ProjectedPts[8 + i], m_ProjectedPts[12 + i] }, 4, s);
+            }
 
+            // Evaluate bezier curve based on the evaluated points
+            for (float t = 0.0; t <= 1.0; t += 0.01) {
+                Homogeneous4 pt = EvaluateBezier(ctrl, 4, t);
+                QueuePoint(pt, RGBAValue(s * 255.f, 128.f, t * 255.f, 255.f));
             }
         }
     }
@@ -436,7 +444,7 @@ void BezierPatchRenderWidget::DrawPoints() {
     QuickSort::Sort(m_PointQueue.Positions, [] (Homogeneous4& value) { return -value.z; }, m_PointQueue.Colors);
 
     // TODO: parallelise
-    #pragma omp parallel for schedule(dynamic)
+    // #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < m_PointQueue.Positions.size(); i++) {
         Homogeneous4 pt = m_PointQueue.Positions[i];
     
@@ -449,24 +457,29 @@ void BezierPatchRenderWidget::DrawPoints() {
         long fbx = (pt.x + 1) * 0.5 * frameBuffer.width;
         long fby = (pt.y + 1) * 0.5 * frameBuffer.height;
 
-        // Fill in point
-        long startx = std::max(fbx - ptsizehalf, 0l);
-        long starty = std::max(fby - ptsizehalf, 0l);
-        int endx = std::min(fbx + ptsizehalf, frameBuffer.width);
-        int endy = std::min(fby + ptsizehalf, frameBuffer.height);
+        // Fill in point TEMP: just draw a pixel
+        // long startx = std::max(fbx - ptsizehalf, 0l);
+        // long starty = std::max(fby - ptsizehalf, 0l);
+        // int endx = std::min(fbx + ptsizehalf, frameBuffer.width);
+        // int endy = std::min(fby + ptsizehalf, frameBuffer.height);
 
-        int r2 = ptsizehalf * ptsizehalf;
-        for (long y = starty; y < endy; y++) {
-            for (long x = startx; x < endx; x++) {
-                // Check circle radius
-                int dy = y - fby;
-                int dx = x - fbx;
+        // int r2 = ptsizehalf * ptsizehalf;
+        // for (long y = starty; y < endy; y++) {
+        //     for (long x = startx; x < endx; x++) {
+        //         // Check circle radius
+        //         // int dy = y - fby;
+        //         // int dx = x - fbx;
 
-                int d = (dy * dy) + (dx * dx);
-                if (d <= r2)
-                    frameBuffer[y][x] = m_PointQueue.Colors[i];
-            }
-        }
+        //         // int d = (dy * dy) + (dx * dx);
+        //         // if (d <= r2)
+        //         //     frameBuffer[y][x] = m_PointQueue.Colors[i];
+
+        //         // Lets NOT check the circle radius
+        //         frameBuffer[y][x] = m_PointQueue.Colors[i];
+        //     }
+        // }
+
+        frameBuffer[fby][fbx] = m_PointQueue.Colors[i];
     }
 }
 
@@ -514,6 +527,33 @@ void BezierPatchRenderWidget::DrawLines() {
                 DrawBresenhamVert(p0fbx, p0fby, p1fbx, p1fby, m_LineQueue.StartColors[i]);
             else
                 DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, m_LineQueue.StartColors[i]);
+        }
+    }
+}
+
+void BezierPatchRenderWidget::DrawBezier(std::array<Homogeneous4, 4>& points, unsigned int resolution) {
+    float step = 1.f / resolution;
+
+    for (float i = step; i < 1 + std::numeric_limits<float>::epsilon(); i += step) {
+        Homogeneous4 pos = EvaluateBezier({ points[0], points[1], points[2], points[3] }, 4, i);
+
+        // TEMP: draw a point there
+        QueuePoint(pos, RGBAValue(i * 256.f, 255.f, 0.f, 255.f));
+    }
+}
+
+Homogeneous4 BezierPatchRenderWidget::EvaluateBezier(std::array<Homogeneous4, 4> points, unsigned int numpts, float t) {
+    // Unrolled recursion using switch statement
+    switch (numpts) {
+        case 2: {
+            return LERP(points[0], points[1], t);
+        } case 3: {
+            return EvaluateBezier({LERP(points[0], points[1], t), LERP(points[1], points[2], t) }, 2, t);
+        } case 4: {
+            return EvaluateBezier({LERP(points[0], points[1], t), LERP(points[1], points[2], t), LERP(points[2], points[3], t) }, 3, t);
+        } default: {
+            // Invalid case
+            return Homogeneous4(0, 0, 0);
         }
     }
 }
