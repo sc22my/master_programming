@@ -122,6 +122,10 @@ private:
 	// Arguments behave same as glOrtho()
     void CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far);
 
+	// Sets projection matrix to perspective
+	// Arguments behave same as glFrustum()
+	void CalculateProjectionPerspective(float left, float right, float bottom, float top, float near, float far);
+
 	// Allocates buffers for points lines etc
 	void AllocateBuffers();
 

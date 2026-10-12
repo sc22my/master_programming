@@ -107,21 +107,37 @@ void BezierPatchRenderWidget::resizeGL(int w, int h) {
     float aspect = (float)w / (float)h;
     
     if (aspect > 1) {
-        CalculateProjectionOrtho(
-                -aspect * 10/renderParameters->zTranslate,
-                aspect * 10/renderParameters->zTranslate,
-                -10/renderParameters->zTranslate,
-                10/renderParameters->zTranslate,
+        if (renderParameters->orthoProjection) {
+            CalculateProjectionOrtho(
+                    -aspect * 10/renderParameters->zTranslate,
+                    aspect * 10/renderParameters->zTranslate,
+                    -10/renderParameters->zTranslate,
+                    10/renderParameters->zTranslate,
+                    0.01,
+                    200.0);
+        } else {
+            CalculateProjectionPerspective(
+                -aspect * 0.01,
+                aspect * 0.01,
+                -0.01,
+                0.01,
                 0.01,
                 200.0);
+        }
     } else {
-        CalculateProjectionOrtho(
-            -10/renderParameters->zTranslate,
-            10/renderParameters->zTranslate,
-            -aspect * 10/renderParameters->zTranslate,
-            aspect * 10/renderParameters->zTranslate,
-            0.01,
-            200.0);
+        if (renderParameters->orthoProjection) {
+            CalculateProjectionOrtho(
+                -10/renderParameters->zTranslate,
+                10/renderParameters->zTranslate,
+                -aspect * 10/renderParameters->zTranslate,
+                aspect * 10/renderParameters->zTranslate,
+                0.01,
+                200.0);
+        } else {
+            CalculateProjectionPerspective( -0.01, 0.01,
+                      -aspect * 0.01, aspect * 0.01,
+                      0.01, 200.0);
+        }
     }
 }
 
@@ -232,7 +248,7 @@ void BezierPatchRenderWidget::paintGL() {
     }
 
     // Render the queues. Draw lines first because it looks better
-    DrawLines();
+   //  DrawLines();
     DrawPoints();
 
     // Put the custom framebufer on the screen to display the image
@@ -315,6 +331,33 @@ void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, 
 
     // Set w to 1
     m_Projection[3][3] = 1;
+}
+
+void BezierPatchRenderWidget::CalculateProjectionPerspective(float left, float right, float bottom, float top, float near, float far) {
+    m_Projection.SetIdentity();
+    
+    float rangex = right - left;
+    float rangey = top - bottom;
+    float rangez = far - near;
+
+    // Inverses
+    float rangexinv = 1.f / rangex;
+    float rangeyinv = 1.f / rangey;
+    float rangezinv = 1.f / rangez;
+
+    float near2 = 2 * near;
+
+    m_Projection[0][0] = near2 * rangexinv;
+    m_Projection[0][2] = (right + left) * rangexinv;
+
+    m_Projection[1][2] = near2 * rangey;
+    m_Projection[1][2] = (top + bottom) * rangeyinv;
+    
+    m_Projection[2][2] = -(far + near) * rangezinv;
+    m_Projection[2][3] = -2 * far * near * rangezinv;
+
+    m_Projection[3][2] = -1;
+    m_Projection[3][3] = 0;
 }
 
 void BezierPatchRenderWidget::AllocateBuffers() {
