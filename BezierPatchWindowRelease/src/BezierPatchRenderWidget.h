@@ -36,7 +36,7 @@
 
 // TODO: Move to own file
 // Structure of arrays implementation of vertex data.
-// For this project, we are only interested in position and data
+// For this project, we are only interested in position and colour
 struct VertexQueue {
 	VertexQueue() {
 		// Reserve a large space for pts
@@ -47,7 +47,30 @@ struct VertexQueue {
 	std::vector<Homogeneous4> Positions;
 	std::vector<RGBAValue> Colors;
 
-	inline void Clear() { Positions.clear(); Colors.clear(); }
+	void Clear() { Positions.clear(); Colors.clear(); }
+};
+
+// Queue structure for lines.
+struct LineQueue {
+	LineQueue() {
+		// Reserve initial space.
+		StartPositions.reserve(1024);
+		StartColors.reserve(1024);
+		EndPositions.reserve(1024);
+		EndColors.reserve(1024);
+	}
+
+	std::vector<Homogeneous4> StartPositions;
+	std::vector<RGBAValue>    StartColors;
+	std::vector<Homogeneous4> EndPositions;
+	std::vector<RGBAValue>    EndColors;
+
+	void Clear() {
+		StartPositions.clear();
+		StartColors.clear();
+		EndPositions.clear();
+		EndColors.clear();
+	}
 };
 
 
@@ -140,14 +163,19 @@ private:
 	// Queues a point to be drawn
 	inline void QueuePoint(Homogeneous4 pos, RGBAValue color) { m_PointQueue.Positions.push_back(pos); m_PointQueue.Colors.push_back(color); };
 
-	// Queues a line with points p1 and p2
-	void QueueLine(Homogeneous4 p1, Homogeneous4 p2, RGBAValue c1, RGBAValue c2);
+	// Queues a line to be drawn
+	inline void QueueLine(Homogeneous4 p1, RGBAValue c1, Homogeneous4 p2, RGBAValue c2) {
+		m_LineQueue.StartPositions.push_back(p1);
+		m_LineQueue.StartColors.push_back(c1);
+		m_LineQueue.EndPositions.push_back(p2);
+		m_LineQueue.EndColors.push_back(c2);
+	}
 
 	// The queue that holds our points
 	VertexQueue m_PointQueue;
 
 	// The queue that holds our lines
-	VertexQueue m_LineQueue;
+	LineQueue m_LineQueue;
 
 	// ======== DRAWING PRIMITIVES ========
 
