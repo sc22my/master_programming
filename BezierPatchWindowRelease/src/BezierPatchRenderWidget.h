@@ -196,11 +196,11 @@ private:
 	// Puts points row column major
 	void ProjectGridPoints(Homogeneous4* buff, unsigned int numpts, float size, unsigned int axis);
 
-	// Clip a line agains an axial plane.
-	// returns if the line is outside the plane
+	// Clip a line from the line queue agains an axial plane.
+	// returns true if the line is fully outside the plane
 	// overwrites the points if clipped
 	// inside is which side of the plane. value of 1 is inside, -1 is outside
-	bool ClipAxial(Homogeneous4* points, int axis, float d, int inside);
+	bool ClipAxial(unsigned int lineindex, int axis, float d, int inside);
 
 	// Vertical and horisontal bresenham
 	void DrawBresenhamVert(int x0, int y0, int x1, int y1, RGBAValue color);

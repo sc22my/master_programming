@@ -186,54 +186,94 @@ void BezierPatchRenderWidget::paintGL() {
         ProjectGridPoints(m_GridPointsY.data(), 5 , 10.f, 1);
         ProjectGridPoints(m_GridPointsZ.data(), 10, 10.f, 2);
 
-        // TEMP: draw grid as points
-        for (auto& xpt : m_GridPointsX) {
-            QueuePoint(xpt, RGBAValue(255.f, 0.f, 0.f, 255.f));
+        // Submit lines
+        // X grid
+        for (unsigned int i = 0; i <= 5; i++) {
+            for (int j = 0; j < 5; j++) {
+                QueueLine(
+                    m_GridPointsX[i * 6 + j    ],
+                    RGBAValue(0.0f, 64.f, 0.f, 255.f),
+                    m_GridPointsX[i * 6 + j + 1],
+                    RGBAValue(0.0f, 64.f, 0.f, 255.f)
+                );
+
+                QueueLine(
+                    m_GridPointsX[i + j * 6],
+                    RGBAValue(0.0f, 64.f, 0.f, 255.f),
+                    m_GridPointsX[i + j * 6 + 6],
+                    RGBAValue(0.0f, 64.f, 0.f, 255.f)
+                );
+            }
         }
 
-        for (auto& ypt : m_GridPointsY) {
-            QueuePoint(ypt, RGBAValue(0.f, 255.f, 0.f, 255.f));
+        // Y grid
+        for (unsigned int i = 0; i <= 5; i++) {
+            for (int j = 0; j < 5; j++) {
+                QueueLine(
+                    m_GridPointsY[i * 6 + j    ],
+                    RGBAValue(64.f, 0.f, 64.f, 255.f),
+                    m_GridPointsY[i * 6 + j + 1],
+                    RGBAValue(64.f, 0.f, 64.f, 255.f)
+                );
+
+                QueueLine(
+                    m_GridPointsY[i + j * 6],
+                    RGBAValue(64.f, 0.f, 64.f, 255.f),
+                    m_GridPointsY[i + j * 6 + 6],
+                    RGBAValue(64.f, 0.f, 64.f, 255.f)
+                );
+            }
         }
 
-        for (auto& zpt : m_GridPointsZ) {
-            QueuePoint(zpt, RGBAValue(0.f, 0.f, 255.f, 255.f));
-        }
+        // Z grid, different size
+        for (unsigned int i = 0; i <= 10; i++) {
+            for (int j = 0; j < 10; j++) {
+                QueueLine(
+                    m_GridPointsZ[i * 11 + j    ],
+                    RGBAValue(64.f, 64.f, 0.f, 255.f),
+                    m_GridPointsZ[i * 11 + j + 1],
+                    RGBAValue(64.f, 64.f, 0.f, 255.f)
+                );
 
-        // DrawLines(m_GridLinesX.data(), count - 1, RGBAValue(255.f, 0, 0, 255.f));
-        // DrawPoints(m_GridPointsX.data(), m_GridPointsX.size(), RGBAValue(255.f, 0.f, 0.f, 255.f));
-        // DrawPoints(m_GridPointsY.data(), m_GridPointsY.size(), RGBAValue(0.f, 255.f, 0.f, 255.f));
-        // DrawPoints(m_GridPointsZ.data(), m_GridPointsZ.size(), RGBAValue(0.f, 0.f, 255.f, 255.f));
+                QueueLine(
+                    m_GridPointsZ[i + j * 11],
+                    RGBAValue(64.f, 64.f, 64.f, 255.f),
+                    m_GridPointsZ[i + j * 11 + 11],
+                    RGBAValue(64.f, 64.f, 64.f, 255.f)
+                );
+            }
+        }
     }
 
     if(renderParameters->netEnabled) {
         // Create lines for patch
         for (int y = 0; y < 4; y++) {
             QueueLine(
-                m_ProjectedPts[(y*4) + 0], RGBAValue(255.f, 255.f, 255.f, 255.f),
-                m_ProjectedPts[(y*4) + 1], RGBAValue(255.f, 255.f, 255.f, 255.f)
+                m_ProjectedPts[(y*4) + 0], RGBAValue(0.f, 255.f, 0.f, 255.f),
+                m_ProjectedPts[(y*4) + 1], RGBAValue(0.f, 255.f, 0.f, 255.f)
             );
             QueueLine(
-                m_ProjectedPts[(y*4) + 1], RGBAValue(255.f, 255.f, 255.f, 255.f),
-                m_ProjectedPts[(y*4) + 2], RGBAValue(255.f, 255.f, 255.f, 255.f)
+                m_ProjectedPts[(y*4) + 1], RGBAValue(0.f, 255.f, 0.f, 255.f),
+                m_ProjectedPts[(y*4) + 2], RGBAValue(0.f, 255.f, 0.f, 255.f)
             );
             QueueLine(
-                m_ProjectedPts[(y*4) + 2], RGBAValue(255.f, 255.f, 255.f, 255.f),
-                m_ProjectedPts[(y*4) + 3], RGBAValue(255.f, 255.f, 255.f, 255.f)
+                m_ProjectedPts[(y*4) + 2], RGBAValue(0.f, 255.f, 0.f, 255.f),
+                m_ProjectedPts[(y*4) + 3], RGBAValue(0.f, 255.f, 0.f, 255.f)
             );
         }
 
         for (int x = 0; x < 4; x++) {
             QueueLine(
-                m_ProjectedPts[0 + x], RGBAValue(255.f, 255.f, 255.f, 255.f),
-                m_ProjectedPts[4 + x], RGBAValue(255.f, 255.f, 255.f, 255.f)
+                m_ProjectedPts[0 + x], RGBAValue(0.f, 255.f, 0.f, 255.f),
+                m_ProjectedPts[4 + x], RGBAValue(0.f, 255.f, 0.f, 255.f)
             );
             QueueLine(
-                m_ProjectedPts[4 + x], RGBAValue(255.f, 255.f, 255.f, 255.f),
+                m_ProjectedPts[4 + x], RGBAValue(0.f, 255.f, 0.f, 255.f),
                 m_ProjectedPts[8 + x], RGBAValue(255.f, 255.f, 255.f, 255.f)
             );
             QueueLine(
-                m_ProjectedPts[8 + x], RGBAValue(255.f, 255.f, 255.f, 255.f),
-                m_ProjectedPts[12 + x], RGBAValue(255.f, 255.f, 255.f, 255.f)
+                m_ProjectedPts[8 + x], RGBAValue(0.f, 255.f, 0.f, 255.f),
+                m_ProjectedPts[12 + x], RGBAValue(0.f, 255.f, 0.f, 255.f)
             );
         }
     }
@@ -248,7 +288,7 @@ void BezierPatchRenderWidget::paintGL() {
     }
 
     // Render the queues. Draw lines first because it looks better
-   //  DrawLines();
+    DrawLines();
     DrawPoints();
 
     // Put the custom framebufer on the screen to display the image
@@ -396,6 +436,7 @@ void BezierPatchRenderWidget::DrawPoints() {
     QuickSort::Sort(m_PointQueue.Positions, [] (Homogeneous4& value) { return -value.z; }, m_PointQueue.Colors);
 
     // TODO: parallelise
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < m_PointQueue.Positions.size(); i++) {
         Homogeneous4 pt = m_PointQueue.Positions[i];
     
@@ -439,13 +480,21 @@ void BezierPatchRenderWidget::DrawLines() {
         m_LineQueue.EndColors
     );
 
+    // Apply homogenious coords
+    for (unsigned int i = 0; i < m_LineQueue.StartPositions.size(); i++) {
+        if (std::abs(m_LineQueue.StartPositions[i].w) > std::numeric_limits<float>::epsilon())
+            m_LineQueue.StartPositions[i] = m_LineQueue.StartPositions[i] / m_LineQueue.StartPositions[i].w;
+        if (std::abs(m_LineQueue.EndPositions[i].w) > std::numeric_limits<float>::epsilon())
+            m_LineQueue.EndPositions[i] = m_LineQueue.EndPositions[i] / m_LineQueue.EndPositions[i].w;
+    }
+
     // Clip lines agains ndc bounds
     for (int i = 0; i < m_LineQueue.StartPositions.size(); i ++) {
         // Clip against axes. TODO: maybe unroll
-        // for (int axis = 0; axis < 3; axis++) {
-        //     ClipAxial(points + i, axis, 1, 1);
-        //     ClipAxial(points + i, axis, -1, -1);
-        // }
+        for (int axis = 0; axis < 3; axis++) {
+            ClipAxial(i, axis, 1, 1);
+            ClipAxial(i, axis, -1, -1);
+        }
 
         // Convert into pixel space
         int p0fbx = (m_LineQueue.StartPositions[i].x + 1) * 0.5 * frameBuffer.width;
@@ -495,31 +544,33 @@ void BezierPatchRenderWidget::ProjectGridPoints(Homogeneous4* buff, unsigned int
     }
 }
 
-bool BezierPatchRenderWidget::ClipAxial(Homogeneous4* points, int axis, float d, int inside) {
+bool BezierPatchRenderWidget::ClipAxial(unsigned int lineindex, int axis, float d, int inside) {
     // distances of points to clip plane
     // and which side it is on
     // diff: distance between pts on axis
-    float d1, d2, side, diff;
+    float d1, d2, sameside, diff;
 
-    d1 = (points[0][axis] - d) * inside;
-    d2 = (points[1][axis] - d) * inside;
-    side = d1 * d2;
+    Homogeneous4 p1 = m_LineQueue.StartPositions[lineindex];
+    Homogeneous4 p2 = m_LineQueue.EndPositions[lineindex];
+
+    d1 = (p1[axis] - d) * inside;
+    d2 = (p2[axis] - d) * inside;
+    sameside = d1 * d2;
     diff = d1 - d2;
 
-    // Discard outside
-    if (side > 0 && d1 < 0) return true;
+    // Discard outside. plane normal faces outside ndc bounding box
+    if (sameside > 0 && d1 > 0) return true;
 
     // Clip if necessarry by using lerp
-    if (side < 0) {
-        Homogeneous4 newpt = LERP(points[0], points[1], d1/diff);
-
-        if (d1 < 0) {
-            points[0] = newpt;
+    if (sameside < 0) {
+        Homogeneous4 newpt = LERP(p2, p1, d1/diff);
+        
+        // TODO: lerp colours as well
+        if (d1 > 0) {
+            m_LineQueue.StartPositions[lineindex] = newpt;
         } else {
-            points[1] = newpt;
+            m_LineQueue.EndPositions[lineindex] = newpt;
         }
-
-        std::cout << "d1: " << d1 << " d2: " << d2 << std::endl;
 
         return false;
     } else {
