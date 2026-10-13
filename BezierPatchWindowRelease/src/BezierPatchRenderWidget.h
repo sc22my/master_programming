@@ -147,6 +147,13 @@ private:
 	// Holds lines connecting control points
 	std::vector<Homogeneous4> m_PatchLines;
 
+	// Bezier resolution per axis
+	const unsigned int m_BezierResolution = 500;
+
+	// Special queue for bezier curve points
+	// pre allocated in AllocateBuffers
+	VertexQueue m_BezierPoints;
+
     // ======== STATE ========
 	// Or our "uniforms"
 
@@ -157,7 +164,10 @@ private:
 	Matrix4 m_MVP;
 
 	// diameter of points
-	unsigned int m_PointSize = 16;
+	unsigned int m_PointSize = 12;
+
+	// Diameter of points used to draw bezier patch
+	unsigned int m_BezierPointSize = 2;
 
 	// Keep track of how many frames we have executed
 	unsigned long long m_NumFrames = 0;
@@ -188,7 +198,7 @@ private:
 	// ======== DRAWING PRIMITIVES ========
 
 	// Draws points from a buffer
-	void DrawPoints();
+	void DrawPoints(VertexQueue& points);
 
 	// Draws lines from a buffer. lines arranged as [l0p0, l0p1, l1p0, l1p1, ...]
 	void DrawLines();

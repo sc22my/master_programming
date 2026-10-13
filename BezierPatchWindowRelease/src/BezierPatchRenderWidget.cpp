@@ -295,17 +295,22 @@ void BezierPatchRenderWidget::paintGL() {
 
     BEGIN_PROFILE("Queue bezier pts");
     if(renderParameters->bezierEnabled) {
-        for (float s = 0.0; s <= 1.0; s += 0.01) {
-            // Evaluate control points
+        #pragma omp parallel for
+        for (unsigned int i = 0; i <= m_BezierResolution; i++) {
+            float s = (float)i / m_BezierResolution;
+
+            // Evaluate control points. Read only call so we good.
             std::array<Homogeneous4, 4> ctrl;
-            for (int i = 0; i < 4; i++) {
-                ctrl[i] = EvaluateBezier({ m_ProjectedPts[0 + i], m_ProjectedPts[4 + i], m_ProjectedPts[8 + i], m_ProjectedPts[12 + i] }, 4, s);
+            for (int j = 0; j < 4; j++) {
+                ctrl[j] = EvaluateBezier({ m_ProjectedPts[0 + j], m_ProjectedPts[4 + j], m_ProjectedPts[8 + j], m_ProjectedPts[12 + j] }, 4, s);
             }
 
             // Evaluate bezier curve based on the evaluated points
-            for (float t = 0.0; t <= 1.0; t += 0.01) {
-                Homogeneous4 pt = EvaluateBezier(ctrl, 4, t);
-                QueuePoint(pt, RGBAValue(s * 255.f, 128.f, t * 255.f, 255.f));
+            for (unsigned int k = 0; k <= m_BezierResolution; k ++) {
+                float t = (float)k / m_BezierResolution;
+
+                m_BezierPoints.Positions[i * m_BezierResolution + k] = EvaluateBezier(ctrl, 4, t);
+                m_BezierPoints.Colors[i * m_BezierResolution + k] = RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f);
             }
         }
     }
@@ -316,7 +321,16 @@ void BezierPatchRenderWidget::paintGL() {
     DrawLines();
     END_PROFILE("DrawLines");
     BEGIN_PROFILE("DrawPoints");
-    DrawPoints();
+    if (renderParameters->bezierEnabled) {
+        // Because our bezier pts are in a different queue, we can push a different point size!
+        unsigned int oldptsize = m_PointSize;
+        m_PointSize = m_BezierPointSize;
+        BEGIN_PROFILE("DrawBezier");
+        DrawPoints(m_BezierPoints);
+        END_PROFILE("DrawBezier");
+        m_PointSize = oldptsize;
+    }
+    DrawPoints(m_PointQueue);
     END_PROFILE("DrawPoints");
 
     // Put the custom framebufer on the screen to display the image
@@ -327,19 +341,21 @@ void BezierPatchRenderWidget::paintGL() {
     END_PROFILE("Mainloop");
     
     // Display results
+    const Profile::Profiler& profiler = Profile::Profiler::GetInstance();
     if (m_NumFrames % 60 == 0) {
         std::cout << "======== BEGIN PROFILE RESULT ========" << std::endl;
-        for (auto& [name, result] : Profile::Profiler::GetInstance().GetResults()) {
+        for (auto& [name, result] : profiler.GetResults()) {
             std::cout << "Profile: " << name << " took: " << result.GetDuration() * 1000 << "ms." << std::endl;
         }
 
         // Print the number of lines and points we drew
-        std::cout << "We drew: " << m_PointQueue.Positions.size() << " points and " << m_LineQueue.StartPositions.size() << " lines." << std::endl;
+        int pointdrawn = m_PointQueue.Positions.size() + (renderParameters->bezierEnabled ? m_BezierPoints.Positions.size() : 0);
+        std::cout << "We drew: " << pointdrawn << " points and " << m_LineQueue.StartPositions.size() << " lines." << std::endl;
 
         // Print ms per line and ms per point
-        double point_duration = Profile::Profiler::GetInstance().GetResults().at("DrawPoints").GetDuration();
-        double line_duration = Profile::Profiler::GetInstance().GetResults().at("DrawLines").GetDuration();
-        std::cout << "We have spent " << point_duration * 1000 / m_PointQueue.Positions.size() << "ms per point" << std::endl;
+        double point_duration = profiler.GetResults().at("DrawPoints").GetDuration();
+        double line_duration = profiler.GetResults().at("DrawLines").GetDuration();
+        std::cout << "We have spent " << point_duration * 1000 / pointdrawn << "ms per point" << std::endl;
         std::cout << "and " << line_duration * 1000 / m_LineQueue.StartPositions.size() << "ms per line" << std::endl;
 
         std::cout << "========  END PROFILE RESULT  ========" << std::endl << std::endl;
@@ -470,6 +486,11 @@ void BezierPatchRenderWidget::AllocateBuffers() {
 
     // lines connecting 4x4 points on 2 axes
     m_PatchLines = std::vector<Homogeneous4>(24 * 2);
+
+    // Allocate space for bezier points
+    const unsigned int numbezierpts = (m_BezierResolution) * (m_BezierResolution + 1);
+    m_BezierPoints.Positions = std::vector<Homogeneous4>(numbezierpts);
+    m_BezierPoints.Colors = std::vector<RGBAValue>(numbezierpts);
 }
 
 void BezierPatchRenderWidget::ClearQueues() {
@@ -477,24 +498,21 @@ void BezierPatchRenderWidget::ClearQueues() {
     m_LineQueue.Clear();
 }
 
-void BezierPatchRenderWidget::DrawPoints() {
+void BezierPatchRenderWidget::DrawPoints(VertexQueue& points) {
     const unsigned int ptsizehalf = m_PointSize >> 1;
 
     // Radius squared for circle drawing
     const unsigned int r2 = ptsizehalf * ptsizehalf;
 
-    // Apply homogenious part
-    // TODO: Parallel
-    for (auto& pt : m_PointQueue.Positions) {
-        if (std::abs(pt.w) > std::numeric_limits<float>::epsilon()) pt = pt / pt.w;
-    }
-
     // Sort by depth
-    QuickSort::Sort(m_PointQueue.Positions, [] (Homogeneous4& value) { return -value.z; }, m_PointQueue.Colors);
+    // QuickSort::Sort(points.Positions, [] (Homogeneous4& value) { return -value.z; }, points.Colors);
 
-    #pragma omp parallel for schedule(dynamic) num_threads(N_THREADS)
-    for (int i = 0; i < m_PointQueue.Positions.size(); i++) {
-        Homogeneous4 pt = m_PointQueue.Positions[i];
+    #pragma omp parallel for
+    for (int i = 0; i < points.Positions.size(); i++) {
+        Homogeneous4 pt = points.Positions[i];
+
+        // Apply homogenious coordinates
+        if (std::abs(pt.w) > std::numeric_limits<float>::epsilon()) pt = pt / pt.w;
     
         // Clip against ndc bounds
         if (pt.x < -1 || pt.x > 1) continue;
@@ -522,9 +540,9 @@ void BezierPatchRenderWidget::DrawPoints() {
 
                 // int d = (dy * dy) + (dx * dx);
                 // if (d <= r2)
-                //     frameBuffer[y][x] = m_PointQueue.Colors[i];
+                //     frameBuffer[y][x] = points.Colors[i];
             
-                frameBuffer[y][x] = m_PointQueue.Colors[i];
+                frameBuffer[y][x] = points.Colors[i];
             }
         }
     }
