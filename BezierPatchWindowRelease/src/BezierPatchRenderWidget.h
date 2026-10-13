@@ -158,6 +158,9 @@ private:
 
 	unsigned int m_PointSize = 1;
 
+	// Keep track of how many frames we have executed
+	unsigned long long m_NumFrames = 0;
+
 	// ======== QUEUES ========
 	// We use a queue system to batch draw all points
 
