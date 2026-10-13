@@ -679,7 +679,9 @@ void BezierPatchRenderWidget::DrawBresenhamHoriz(int x0, int y0, int x1, int y1,
     int D = (2 * dy) - dx;
     int y = y0;
     for (int x = x0; x < x1; x++) {
-        frameBuffer[y][x] = color;
+        // lol. temporary if check to stop faulty line clipping crashing the whole thing
+        if (x >= 0 && x < frameBuffer.width && y >= 0 && y < frameBuffer.height)
+            frameBuffer[y][x] = color;
 
         if (D > 0) {
             y = y + dir;
@@ -703,7 +705,8 @@ void BezierPatchRenderWidget::DrawBresenhamVert(int x0, int y0, int x1, int y1, 
     int D = (2 * dx) - dy;
     int x = x0;
     for (int y = y0; y < y1; y++) {
-        frameBuffer[y][x] = color;
+        if (x >= 0 && x < frameBuffer.width && y >= 0 && y < frameBuffer.height)
+            frameBuffer[y][x] = color;
 
         if (D > 0) {
             x = x + dir;
