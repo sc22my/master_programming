@@ -478,7 +478,10 @@ void BezierPatchRenderWidget::ClearQueues() {
 }
 
 void BezierPatchRenderWidget::DrawPoints() {
-    int ptsizehalf = m_PointSize << 1;
+    const unsigned int ptsizehalf = m_PointSize >> 1;
+
+    // Radius squared for circle drawing
+    const unsigned int r2 = ptsizehalf * ptsizehalf;
 
     // Apply homogenious part
     // TODO: Parallel
@@ -489,9 +492,7 @@ void BezierPatchRenderWidget::DrawPoints() {
     // Sort by depth
     QuickSort::Sort(m_PointQueue.Positions, [] (Homogeneous4& value) { return -value.z; }, m_PointQueue.Colors);
 
-    // TODO: parallelise
-    // Currently, using #pragma omp parallel for SLOWS DOWN??!?!?!?!?
-    #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for schedule(dynamic) num_threads(N_THREADS)
     for (int i = 0; i < m_PointQueue.Positions.size(); i++) {
         Homogeneous4 pt = m_PointQueue.Positions[i];
     
@@ -501,27 +502,28 @@ void BezierPatchRenderWidget::DrawPoints() {
         if (pt.z < -1 || pt.z > 1) continue;
 
         // Get pixel space coords
-        long fbx = (pt.x + 1) * 0.5 * frameBuffer.width;
-        long fby = (pt.y + 1) * 0.5 * frameBuffer.height;
+        const long fbx = (pt.x + 1) * (frameBuffer.width >> 1);
+        const long fby = (pt.y + 1) * (frameBuffer.height >> 1);
 
         // Fill in point
-        long startx = std::max(fbx - ptsizehalf, 0l);
-        long starty = std::max(fby - ptsizehalf, 0l);
-        int endx = std::min(fbx + ptsizehalf, frameBuffer.width);
-        int endy = std::min(fby + ptsizehalf, frameBuffer.height);
+        const long startx = std::max(fbx - ptsizehalf, 0l);
+        const long starty = std::max(fby - ptsizehalf, 0l);
+        const int endx = std::min(fbx + ptsizehalf, frameBuffer.width);
+        const int endy = std::min(fby + ptsizehalf, frameBuffer.height);
 
-        int r2 = ptsizehalf * ptsizehalf;
         for (long y = starty; y < endy; y++) {
             for (long x = startx; x < endx; x++) {
                 // Check circle radius
+                // Drawing as a circle is better as we write less!
+                // so its worth the extra calculation and if statement
+                // And out patch looks smooth
                 // int dy = y - fby;
                 // int dx = x - fbx;
 
                 // int d = (dy * dy) + (dx * dx);
                 // if (d <= r2)
                 //     frameBuffer[y][x] = m_PointQueue.Colors[i];
-
-                // Lets NOT check the circle radius
+            
                 frameBuffer[y][x] = m_PointQueue.Colors[i];
             }
         }

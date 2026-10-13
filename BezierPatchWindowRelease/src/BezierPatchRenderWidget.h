@@ -156,7 +156,8 @@ private:
 	// Model view projection
 	Matrix4 m_MVP;
 
-	unsigned int m_PointSize = 1;
+	// diameter of points
+	unsigned int m_PointSize = 16;
 
 	// Keep track of how many frames we have executed
 	unsigned long long m_NumFrames = 0;
