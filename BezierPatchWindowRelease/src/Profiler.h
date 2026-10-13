@@ -44,6 +44,8 @@ namespace Profile {
         void EndProfile(std::string_view name);
     private:
         std::unordered_map<std::string_view, ProfileResult> m_Results;
+
+        // TODO: a ring buffer storing previous frames for averaging results
     };
 }
 
