@@ -363,7 +363,8 @@ void BezierPatchRenderWidget::paintGL() {
         std::cout << "========  END PROFILE RESULT  ========" << std::endl << std::endl;
 
         // How many ms did we spend per point?
-        
+        double msperpt = (profiler.GetResults().at("DrawPoints").GetDuration() * 1000) / m_TileManager.GetNumPointsDrawn();
+        std::cout << "We spent " << msperpt << "ms per point" << std::endl;
     }
 
     // Increment frame counter

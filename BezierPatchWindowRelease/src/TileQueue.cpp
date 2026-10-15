@@ -63,7 +63,7 @@ void TileManager::Draw(RGBAImage* fb) {
 
         // Add to metrics
         #pragma omp atomic
-        m_PointsDrawn += m_Tiles.GetNumQueuedPoints();
+        m_PointsDrawn += m_Tiles[i].GetNumQueuedPoints();
 
         m_Tiles[i].DrawPoints(fb, x, y);
     }
