@@ -32,6 +32,7 @@
 #include "RGBAValue.h"
 #include "RenderParameters.h"
 #include "RGBAImage.h"
+#include "TileQueue.h"
 
 
 // TODO: Move to own file
@@ -148,11 +149,7 @@ private:
 	std::vector<Homogeneous4> m_PatchLines;
 
 	// Bezier resolution per axis
-	const unsigned int m_BezierResolution = 500;
-
-	// Special queue for bezier curve points
-	// pre allocated in AllocateBuffers
-	VertexQueue m_BezierPoints;
+	const unsigned int m_BezierResolution = 1000;
 
     // ======== STATE ========
 	// Or our "uniforms"
@@ -162,9 +159,6 @@ private:
 
 	// Model view projection
 	Matrix4 m_MVP;
-
-	// diameter of points
-	unsigned int m_PointSize = 12;
 
 	// Diameter of points used to draw bezier patch
 	unsigned int m_BezierPointSize = 2;
@@ -179,7 +173,8 @@ private:
 	void ClearQueues();
 
 	// Queues a point to be drawn
-	inline void QueuePoint(Homogeneous4 pos, RGBAValue color) { m_PointQueue.Positions.push_back(pos); m_PointQueue.Colors.push_back(color); };
+	// inline void QueuePoint(Homogeneous4 pos, RGBAValue color) { m_PointQueue.Positions.push_back(pos); m_PointQueue.Colors.push_back(color); };
+	inline void QueuePoint(Homogeneous4 pos, RGBAValue color) { m_TileManager.QueuePoint(pos, color); };
 
 	// Queues a line to be drawn
 	inline void QueueLine(Homogeneous4 p1, RGBAValue c1, Homogeneous4 p2, RGBAValue c2) {
@@ -189,8 +184,8 @@ private:
 		m_LineQueue.EndColors.push_back(c2);
 	}
 
-	// The queue that holds our points
-	VertexQueue m_PointQueue;
+	// New tile buffer for tile rendering
+	TileManager m_TileManager;
 
 	// The queue that holds our lines
 	LineQueue m_LineQueue;

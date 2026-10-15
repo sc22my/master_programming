@@ -66,9 +66,9 @@ Point3 Homogeneous4::Point() const {
 Vector3 Homogeneous4::Vector() const {
     Vector3 returnVal;
 
-    for (int i = 0; i < 3; i++) {
-        returnVal[i] = (*this)[i];
-    }
+    returnVal.x = x;
+    returnVal.y = y;
+    returnVal.z = z;
 
     return returnVal;
 }
@@ -78,9 +78,10 @@ Vector3 Homogeneous4::Vector() const {
 Homogeneous4 Homogeneous4::operator +(const Homogeneous4 &other) const {
     Homogeneous4 returnVal;
 
-    for (int i = 0; i < 4; i++) {
-        returnVal[i] = (*this)[i] + other[i];
-    }
+    returnVal.x = x + other.x;
+    returnVal.y = y + other.y;
+    returnVal.z = z + other.z;
+    returnVal.w = w + other.w;
 
     return returnVal;
 }
@@ -89,9 +90,10 @@ Homogeneous4 Homogeneous4::operator +(const Homogeneous4 &other) const {
 Homogeneous4 Homogeneous4::operator -(const Homogeneous4 &other) const {
     Homogeneous4 returnVal;
 
-    for (int i = 0; i < 4; i++) {
-        returnVal[i] = (*this)[i] - other[i];
-    }
+    returnVal.x = x - other.x;
+    returnVal.y = y - other.y;
+    returnVal.z = z - other.z;
+    returnVal.w = w - other.w;
 
     return returnVal;
 }
@@ -100,9 +102,10 @@ Homogeneous4 Homogeneous4::operator -(const Homogeneous4 &other) const {
 Homogeneous4 Homogeneous4::operator *(float factor) const {
     Homogeneous4 returnVal;
 
-    for (int i = 0; i < 4; i++) {
-        returnVal[i] = (*this)[i] * factor;
-    }
+    returnVal.x = x * factor;
+    returnVal.y = y * factor;
+    returnVal.z = z * factor;
+    returnVal.w = w * factor;
 
     return returnVal;
 }
@@ -110,10 +113,12 @@ Homogeneous4 Homogeneous4::operator *(float factor) const {
 // division operator. TODO: watch out for zero?
 Homogeneous4 Homogeneous4::operator /(float factor) const {
     Homogeneous4 returnVal;
+    float factorinv = 1 / factor;
 
-    for (int i = 0; i < 4; i++) {
-        returnVal[i] = (*this)[i] / factor;
-    }
+    returnVal.x = x * factorinv;
+    returnVal.y = y * factorinv;
+    returnVal.z = z * factorinv;
+    returnVal.w = w * factorinv;
 
     return returnVal;
 }

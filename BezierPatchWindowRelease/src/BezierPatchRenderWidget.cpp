@@ -105,6 +105,9 @@ void BezierPatchRenderWidget::resizeGL(int w, int h) {
     renderParameters->windowWidth = w;
     renderParameters->windowHeight = h;
 
+    // Resize tile manager
+    m_TileManager.Resize(frameBuffer.width, frameBuffer.height);
+
     // Recalculate projection matrix
     float aspect = (float)w / (float)h;
     
@@ -180,12 +183,21 @@ void BezierPatchRenderWidget::paintGL() {
     // Render points
     BEGIN_PROFILE("Queue control pts");
     if(renderParameters->verticesEnabled) {
-        // Draw inactive colour first
+        // Submit a ball of points
+        float radius = 0.1;
+        #pragma omp parallel for
         for (unsigned int i = 0; i < m_ProjectedPts.size(); i++) {
-            if (i == renderParameters->activeVertex)
-                QueuePoint(m_ProjectedPts[i], RGBAValue(255.f, 0.f, 0.f, 255.f));
-            else
-                QueuePoint(m_ProjectedPts[i], RGBAValue(191.f, 191.f, 191.f, 255.f));
+            for (float phi = 0.0; phi < 2.f*PI; phi += PI / 30.0) {
+                for (float theta = 0.0; theta < 2.f*PI; theta += PI / 30.0) {
+                    Homogeneous4 sphere = Homogeneous4(radius * cos(phi) * cos(theta), radius * cos(phi) * sin(theta), radius * sin(phi), 0.f);
+                    sphere = m_MVP * sphere;
+
+                    if (i == renderParameters->activeVertex)
+                        QueuePoint(m_ProjectedPts[i] + sphere, RGBAValue(255.f, 0.f, 0.f, 255.f));
+                    else
+                        QueuePoint(m_ProjectedPts[i] + sphere, RGBAValue(191.f, 191.f, 191.f, 255.f));
+                }
+            }
         }
     }
     END_PROFILE("Queue control pts");
@@ -295,6 +307,9 @@ void BezierPatchRenderWidget::paintGL() {
 
     BEGIN_PROFILE("Queue bezier pts");
     if(renderParameters->bezierEnabled) {
+
+        // Temporarily disable parallel queue submit
+        // Because TileManager dont support it
         #pragma omp parallel for
         for (unsigned int i = 0; i <= m_BezierResolution; i++) {
             float s = (float)i / m_BezierResolution;
@@ -309,8 +324,13 @@ void BezierPatchRenderWidget::paintGL() {
             for (unsigned int k = 0; k <= m_BezierResolution; k ++) {
                 float t = (float)k / m_BezierResolution;
 
-                m_BezierPoints.Positions[i * m_BezierResolution + k] = EvaluateBezier(ctrl, 4, t);
-                m_BezierPoints.Colors[i * m_BezierResolution + k] = RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f);
+                m_TileManager.QueuePoint(
+                    EvaluateBezier(ctrl, 4, t),
+                    RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f));
+
+                // m_TileManager.QueuePoint(
+                //     m_MVP * Homogeneous4(t * 10 - 5, std::sin(t * 20) + std::cos(s * 20), s * 10 - 5, 1),
+                //     RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f));
             }
         }
     }
@@ -321,16 +341,8 @@ void BezierPatchRenderWidget::paintGL() {
     DrawLines();
     END_PROFILE("DrawLines");
     BEGIN_PROFILE("DrawPoints");
-    if (renderParameters->bezierEnabled) {
-        // Because our bezier pts are in a different queue, we can push a different point size!
-        unsigned int oldptsize = m_PointSize;
-        m_PointSize = m_BezierPointSize;
-        BEGIN_PROFILE("DrawBezier");
-        DrawPoints(m_BezierPoints);
-        END_PROFILE("DrawBezier");
-        m_PointSize = oldptsize;
-    }
-    DrawPoints(m_PointQueue);
+    // DrawPoints(m_PointQueue);
+    m_TileManager.Draw(&frameBuffer);
     END_PROFILE("DrawPoints");
 
     // Put the custom framebufer on the screen to display the image
@@ -348,17 +360,10 @@ void BezierPatchRenderWidget::paintGL() {
             std::cout << "Profile: " << name << " took: " << result.GetDuration() * 1000 << "ms." << std::endl;
         }
 
-        // Print the number of lines and points we drew
-        int pointdrawn = m_PointQueue.Positions.size() + (renderParameters->bezierEnabled ? m_BezierPoints.Positions.size() : 0);
-        std::cout << "We drew: " << pointdrawn << " points and " << m_LineQueue.StartPositions.size() << " lines." << std::endl;
-
-        // Print ms per line and ms per point
-        double point_duration = profiler.GetResults().at("DrawPoints").GetDuration();
-        double line_duration = profiler.GetResults().at("DrawLines").GetDuration();
-        std::cout << "We have spent " << point_duration * 1000 / pointdrawn << "ms per point" << std::endl;
-        std::cout << "and " << line_duration * 1000 / m_LineQueue.StartPositions.size() << "ms per line" << std::endl;
-
         std::cout << "========  END PROFILE RESULT  ========" << std::endl << std::endl;
+
+        // How many ms did we spend per point?
+        
     }
 
     // Increment frame counter
@@ -487,65 +492,12 @@ void BezierPatchRenderWidget::AllocateBuffers() {
     // lines connecting 4x4 points on 2 axes
     m_PatchLines = std::vector<Homogeneous4>(24 * 2);
 
-    // Allocate space for bezier points
-    const unsigned int numbezierpts = (m_BezierResolution) * (m_BezierResolution + 1);
-    m_BezierPoints.Positions = std::vector<Homogeneous4>(numbezierpts);
-    m_BezierPoints.Colors = std::vector<RGBAValue>(numbezierpts);
+    // Initialise tile buffer
+    m_TileManager.Resize(frameBuffer.width, frameBuffer.height);
 }
 
 void BezierPatchRenderWidget::ClearQueues() {
-    m_PointQueue.Clear();
     m_LineQueue.Clear();
-}
-
-void BezierPatchRenderWidget::DrawPoints(VertexQueue& points) {
-    const unsigned int ptsizehalf = m_PointSize >> 1;
-
-    // Radius squared for circle drawing
-    const unsigned int r2 = ptsizehalf * ptsizehalf;
-
-    // Sort by depth
-    // QuickSort::Sort(points.Positions, [] (Homogeneous4& value) { return -value.z; }, points.Colors);
-
-    #pragma omp parallel for
-    for (int i = 0; i < points.Positions.size(); i++) {
-        Homogeneous4 pt = points.Positions[i];
-
-        // Apply homogenious coordinates
-        if (std::abs(pt.w) > std::numeric_limits<float>::epsilon()) pt = pt / pt.w;
-    
-        // Clip against ndc bounds
-        if (pt.x < -1 || pt.x > 1) continue;
-        if (pt.y < -1 || pt.y > 1) continue;
-        if (pt.z < -1 || pt.z > 1) continue;
-
-        // Get pixel space coords
-        const long fbx = (pt.x + 1) * (frameBuffer.width >> 1);
-        const long fby = (pt.y + 1) * (frameBuffer.height >> 1);
-
-        // Fill in point
-        const long startx = std::max(fbx - ptsizehalf, 0l);
-        const long starty = std::max(fby - ptsizehalf, 0l);
-        const int endx = std::min(fbx + ptsizehalf, frameBuffer.width);
-        const int endy = std::min(fby + ptsizehalf, frameBuffer.height);
-
-        for (long y = starty; y < endy; y++) {
-            for (long x = startx; x < endx; x++) {
-                // Check circle radius
-                // Drawing as a circle is better as we write less!
-                // so its worth the extra calculation and if statement
-                // And out patch looks smooth
-                // int dy = y - fby;
-                // int dx = x - fbx;
-
-                // int d = (dy * dy) + (dx * dx);
-                // if (d <= r2)
-                //     frameBuffer[y][x] = points.Colors[i];
-            
-                frameBuffer[y][x] = points.Colors[i];
-            }
-        }
-    }
 }
 
 void BezierPatchRenderWidget::DrawLines() {
@@ -618,7 +570,7 @@ Homogeneous4 BezierPatchRenderWidget::EvaluateBezier(std::array<Homogeneous4, 4>
             return EvaluateBezier({LERP(points[0], points[1], t), LERP(points[1], points[2], t), LERP(points[2], points[3], t) }, 3, t);
         } default: {
             // Invalid case
-            return Homogeneous4(0, 0, 0);
+            return Homogeneous4(0, 0, 0, 0);
         }
     }
 }
