@@ -1,5 +1,13 @@
 bin
 
+# QT
+.qmake.stash
+moc_*.cpp
+moc_predefs.h
+
+# Binary
+BezierPatchWindowRelease/BezierPatchWindowRelease*
+
 .vscode
 
 # Prerequisites
