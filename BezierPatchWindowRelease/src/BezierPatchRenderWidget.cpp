@@ -536,7 +536,10 @@ void BezierPatchRenderWidget::DrawLines() {
         m_LineQueue.EndColors
     );
 
-    // Clip lines agains ndc bounds
+    // Here omp makes no difference.
+    // Probably because we are not drawing enough lines
+    // to justify the overhead
+    // #pragma omp parallel for
     for (int i = 0; i < m_LineQueue.StartPositions.size(); i ++) {
         // Apply homogenious coordinates
         if (std::abs(m_LineQueue.StartPositions[i].w) > std::numeric_limits<float>::epsilon())
@@ -573,17 +576,6 @@ void BezierPatchRenderWidget::DrawLines() {
             else
                 DrawBresenhamVert(p1fbx, p1fby, p0fbx, p0fby, m_LineQueue.StartColors[i]);
         }
-    }
-}
-
-void BezierPatchRenderWidget::DrawBezier(std::array<Homogeneous4, 4>& points, unsigned int resolution) {
-    float step = 1.f / resolution;
-
-    for (float i = step; i < 1 + std::numeric_limits<float>::epsilon(); i += step) {
-        Homogeneous4 pos = EvaluateBezier({ points[0], points[1], points[2], points[3] }, 4, i);
-
-        // TEMP: draw a point there
-        QueuePoint(pos, RGBAValue(i * 256.f, 255.f, 0.f, 255.f));
     }
 }
 
@@ -681,13 +673,6 @@ void BezierPatchRenderWidget::DrawBresenhamHoriz(int x0, int y0, int x1, int y1,
     int D = (2 * dy) - dx;
     int y = y0;
     for (int x = x0; x < x1; x++) {
-        if (x < 0 || x >= frameBuffer.width || y < 0 || y >= frameBuffer.height) {
-            std::cout <<
-                "BAD POINT! (" << x << ", " << y << ")" <<
-                "fb: (" << frameBuffer.width << ", " << frameBuffer.height << ")" <<
-                "x0 " << x0 << " y0" << y0 << " x1 " << x1 << " y1 " << y1 << std::endl;
-            continue;
-        }
         frameBuffer[y][x] = color;
 
         if (D > 0) {
@@ -712,13 +697,6 @@ void BezierPatchRenderWidget::DrawBresenhamVert(int x0, int y0, int x1, int y1, 
     int D = (2 * dx) - dy;
     int x = x0;
     for (int y = y0; y < y1; y++) {
-        if (x < 0 || x >= frameBuffer.width || y < 0 || y >= frameBuffer.height) {
-            std::cout <<
-                "BAD POINT! (" << x << ", " << y << ")" <<
-                "fb: (" << frameBuffer.width << ", " << frameBuffer.height << ")" <<
-                "x0 " << x0 << " y0 " << y0 << " x1 " << x1 << " y1 " << y1 << std::endl;
-            continue;
-        }
         frameBuffer[y][x] = color;
 
         if (D > 0) {

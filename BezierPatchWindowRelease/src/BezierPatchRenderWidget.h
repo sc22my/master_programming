@@ -201,9 +201,6 @@ private:
 	// Draws lines from a buffer. lines arranged as [l0p0, l0p1, l1p0, l1p1, ...]
 	void DrawLines();
 
-	// Generates points to draw the bezier curve. Max allowed points is 4
-	void DrawBezier(std::array<Homogeneous4, 4>& points, unsigned int resolution);
-
 	// Evaluates the point at t. max points: 4
 	Homogeneous4 EvaluateBezier(std::array<Homogeneous4, 4> points, unsigned int numpts, float t);
 
