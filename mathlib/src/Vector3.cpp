@@ -33,8 +33,8 @@ Vector3 Vector3::operator +(const Vector3 &other) const {
     Vector3 returnVal;
 
     returnVal.x = x + other.x;
-    returnVal.y = y - other.y;
-    returnVal.z = z - other.z;
+    returnVal.y = y + other.y;
+    returnVal.z = z + other.z;
 
     return returnVal;
 }

@@ -150,6 +150,7 @@ void Matrix4::SetTranslation(const Vector3 &vector) {
     coordinates[0][3] = vector[0];
     coordinates[1][3] = vector[1];
     coordinates[2][3] = vector[2];
+    coordinates[3][3] = 1;
 }
 
 void Matrix4::SetScale(float xScale, float yScale, float zScale) {

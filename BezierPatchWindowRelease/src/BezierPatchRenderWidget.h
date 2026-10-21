@@ -119,6 +119,9 @@ private:
 private:
     void forceRepaint();
 
+	// Calculates the projecttion matrix
+	void CalculateProjection();
+
 	// Sets the projection matrix to ortho.
 	// Arguments behave same as glOrtho()
     void CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far);
@@ -214,8 +217,8 @@ private:
 	// Clip a line from the line queue agains an axial plane.
 	// returns true if the line is fully outside the plane
 	// overwrites the points if clipped
-	// inside is which side of the plane. value of 1 is inside, -1 is outside
-	bool ClipAxial(unsigned int lineindex, int axis, float d, int inside);
+	// normal is which direction the normal faces must be either 1 or -1
+	bool ClipAxial(unsigned int lineindex, int axis, int normal);
 
 	// Vertical and horisontal bresenham
 	void DrawBresenhamVert(int x0, int y0, int x1, int y1, RGBAValue color);

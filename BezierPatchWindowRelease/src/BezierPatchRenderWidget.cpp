@@ -37,7 +37,7 @@
 #define N_THREADS 16
 
 // shortcuts. TODO: move to mathlib
-#define LERP(p1, p2, t) (t*p1) + ((1-t)*p2) 
+#define LERP(p1, p2, t) ((1-t)*p1) + (t*p2) 
 
 // constructor
 BezierPatchRenderWidget::BezierPatchRenderWidget (
@@ -107,43 +107,6 @@ void BezierPatchRenderWidget::resizeGL(int w, int h) {
 
     // Resize tile manager
     m_TileManager.Resize(frameBuffer.width, frameBuffer.height);
-
-    // Recalculate projection matrix
-    float aspect = (float)w / (float)h;
-    
-    if (aspect > 1) {
-        if (renderParameters->orthoProjection) {
-            CalculateProjectionOrtho(
-                    -aspect * 10/renderParameters->zTranslate,
-                    aspect * 10/renderParameters->zTranslate,
-                    -10/renderParameters->zTranslate,
-                    10/renderParameters->zTranslate,
-                    0.01,
-                    200.0);
-        } else {
-            CalculateProjectionPerspective(
-                -aspect * 0.01,
-                aspect * 0.01,
-                -0.01,
-                0.01,
-                0.01,
-                200.0);
-        }
-    } else {
-        if (renderParameters->orthoProjection) {
-            CalculateProjectionOrtho(
-                -10/renderParameters->zTranslate,
-                10/renderParameters->zTranslate,
-                -aspect * 10/renderParameters->zTranslate,
-                aspect * 10/renderParameters->zTranslate,
-                0.01,
-                200.0);
-        } else {
-            CalculateProjectionPerspective( -0.01, 0.01,
-                      -aspect * 0.01, aspect * 0.01,
-                      0.01, 200.0);
-        }
-    }
 }
 
 
@@ -160,10 +123,28 @@ void BezierPatchRenderWidget::paintGL() {
     glClearColor(0.8, 0.8, 0.6, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Set model view matrix. Translate the camera back by reverse of 10 units
-    Matrix4 cameratranslation;
-    cameratranslation.SetTranslation(Vector3(0, 0, -10));
-    renderParameters->modelviewMatrix = cameratranslation * renderParameters->rotationMatrix;
+    // Check for resize and perspective/ortho change
+    if(renderParameters->triggerResize) {
+        this->resizeGL(renderParameters->windowWidth, renderParameters->windowHeight);
+        renderParameters->triggerResize = false;
+    }
+
+    // Calculate projection
+    CalculateProjection();
+
+    // Camera starting transform: inverse
+    Vector3 camerapos = Vector3(0, 0, -8);
+
+    // Apply slider translation
+    // No idea why i have to invert the x
+    camerapos = camerapos + Vector3(renderParameters->xTranslate, renderParameters->yTranslate, renderParameters->zTranslate - 1);
+
+    // Set the inverse camera
+    Matrix4 viewmatrix;
+    viewmatrix.SetTranslation(camerapos);
+
+    // Set model view matrix.
+    renderParameters->modelviewMatrix = viewmatrix * renderParameters->rotationMatrix;
 
     // Calculate MVP matrix
     m_MVP = m_Projection * renderParameters->modelviewMatrix;
@@ -215,16 +196,16 @@ void BezierPatchRenderWidget::paintGL() {
             for (int j = 0; j < 5; j++) {
                 QueueLine(
                     m_GridPointsX[i * 6 + j    ],
-                    RGBAValue(0.0f, 64.f, 0.f, 255.f),
+                    RGBAValue(0.0f, 64.f, 64.f, 255.f),
                     m_GridPointsX[i * 6 + j + 1],
-                    RGBAValue(0.0f, 64.f, 0.f, 255.f)
+                    RGBAValue(0.0f, 64.f, 64.f, 255.f)
                 );
 
                 QueueLine(
                     m_GridPointsX[i + j * 6],
-                    RGBAValue(0.0f, 64.f, 0.f, 255.f),
+                    RGBAValue(0.0f, 64.f, 64.f, 255.f),
                     m_GridPointsX[i + j * 6 + 6],
-                    RGBAValue(0.0f, 64.f, 0.f, 255.f)
+                    RGBAValue(0.0f, 64.f, 64.f, 255.f)
                 );
             }
         }
@@ -260,9 +241,9 @@ void BezierPatchRenderWidget::paintGL() {
 
                 QueueLine(
                     m_GridPointsZ[i + j * 11],
-                    RGBAValue(64.f, 64.f, 64.f, 255.f),
+                    RGBAValue(64.f, 64.f, 0.f, 255.f),
                     m_GridPointsZ[i + j * 11 + 11],
-                    RGBAValue(64.f, 64.f, 64.f, 255.f)
+                    RGBAValue(64.f, 64.f, 0.f, 255.f)
                 );
             }
         }
@@ -317,7 +298,11 @@ void BezierPatchRenderWidget::paintGL() {
             // Evaluate control points. Read only call so we good.
             std::array<Homogeneous4, 4> ctrl;
             for (int j = 0; j < 4; j++) {
-                ctrl[j] = EvaluateBezier({ m_ProjectedPts[0 + j], m_ProjectedPts[4 + j], m_ProjectedPts[8 + j], m_ProjectedPts[12 + j] }, 4, s);
+                ctrl[j] = EvaluateBezier({
+                    m_ProjectedPts[4 * j + 0],
+                    m_ProjectedPts[4 * j + 1],
+                    m_ProjectedPts[4 * j + 2],
+                    m_ProjectedPts[4 * j + 3] }, 4, s);
             }
 
             // Evaluate bezier curve based on the evaluated points
@@ -326,11 +311,9 @@ void BezierPatchRenderWidget::paintGL() {
 
                 m_TileManager.QueuePoint(
                     EvaluateBezier(ctrl, 4, t),
-                    RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f));
 
-                // m_TileManager.QueuePoint(
-                //     m_MVP * Homogeneous4(t * 10 - 5, std::sin(t * 20) + std::cos(s * 20), s * 10 - 5, 1),
-                //     RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f));
+                    // Make the colours match
+                    RGBAValue(t * 255.f, 128.f, s * 255.f, 255.f));
             }
         }
     }
@@ -340,8 +323,8 @@ void BezierPatchRenderWidget::paintGL() {
     BEGIN_PROFILE("DrawLines");
     DrawLines();
     END_PROFILE("DrawLines");
+
     BEGIN_PROFILE("DrawPoints");
-    // DrawPoints(m_PointQueue);
     m_TileManager.Draw(&frameBuffer);
     END_PROFILE("DrawPoints");
 
@@ -364,6 +347,7 @@ void BezierPatchRenderWidget::paintGL() {
 
         // How many ms did we spend per point?
         double msperpt = (profiler.GetResults().at("DrawPoints").GetDuration() * 1000) / m_TileManager.GetNumPointsDrawn();
+        std::cout << "We drew " << m_TileManager.GetNumPointsDrawn() << " points." << std::endl;
         std::cout << "We spent " << msperpt << "ms per point" << std::endl;
     }
 
@@ -419,6 +403,47 @@ void BezierPatchRenderWidget::mouseReleaseEvent(QMouseEvent *event)
     
     // send signal to the controller for detailed processing
     emit EndScaledDrag(x,y);
+}
+
+void BezierPatchRenderWidget::CalculateProjection() {
+    // Recalculate projection matrix
+    float aspect = (float)frameBuffer.width/ (float)frameBuffer.height;
+    
+    if (aspect > 1.0) {
+        if (renderParameters->orthoProjection) {
+            CalculateProjectionOrtho(
+                    -aspect * 10/renderParameters->zTranslate,
+                    aspect * 10/renderParameters->zTranslate,
+                    -10/renderParameters->zTranslate,
+                    10/renderParameters->zTranslate,
+                    0.01,
+                    200.0);
+        } else {
+            CalculateProjectionPerspective(
+                -aspect * 0.01,
+                aspect * 0.01,
+                -0.01,
+                0.01,
+                0.01,
+                200.0);
+        }
+    } else {
+        aspect = 1/aspect;
+
+        if (renderParameters->orthoProjection) {
+            CalculateProjectionOrtho(
+                -10/renderParameters->zTranslate,
+                10/renderParameters->zTranslate,
+                -aspect * 10/renderParameters->zTranslate,
+                aspect * 10/renderParameters->zTranslate,
+                0.01,
+                200.0);
+        } else {
+            CalculateProjectionPerspective( -0.01, 0.01,
+                      -aspect * 0.01, aspect * 0.01,
+                      0.01, 200.0);
+        }
+    }
 }
 
 void BezierPatchRenderWidget::CalculateProjectionOrtho(float left, float right, float bottom, float top, float near, float far) {
@@ -511,27 +536,29 @@ void BezierPatchRenderWidget::DrawLines() {
         m_LineQueue.EndColors
     );
 
-    // Apply homogenious coords
-    for (unsigned int i = 0; i < m_LineQueue.StartPositions.size(); i++) {
+    // Clip lines agains ndc bounds
+    for (int i = 0; i < m_LineQueue.StartPositions.size(); i ++) {
+        // Apply homogenious coordinates
         if (std::abs(m_LineQueue.StartPositions[i].w) > std::numeric_limits<float>::epsilon())
             m_LineQueue.StartPositions[i] = m_LineQueue.StartPositions[i] / m_LineQueue.StartPositions[i].w;
         if (std::abs(m_LineQueue.EndPositions[i].w) > std::numeric_limits<float>::epsilon())
             m_LineQueue.EndPositions[i] = m_LineQueue.EndPositions[i] / m_LineQueue.EndPositions[i].w;
-    }
 
-    // Clip lines agains ndc bounds
-    for (int i = 0; i < m_LineQueue.StartPositions.size(); i ++) {
-        // Clip against axes. TODO: maybe unroll
-        for (int axis = 0; axis < 3; axis++) {
-            ClipAxial(i, axis, 1, 1);
-            ClipAxial(i, axis, -1, -1);
-        }
+        // Clip lines agains ndc bounds
+        if (ClipAxial(i, 0, -1)) continue;
+        if (ClipAxial(i, 0, 1)) continue;
+
+        if (ClipAxial(i, 1, -1)) continue;
+        if (ClipAxial(i, 1, 1)) continue;
+
+        if (ClipAxial(i, 2, 1)) continue;
+        if (ClipAxial(i, 2, -1)) continue;
 
         // Convert into pixel space
-        int p0fbx = (m_LineQueue.StartPositions[i].x + 1) * 0.5 * frameBuffer.width;
-        int p0fby = (m_LineQueue.StartPositions[i].y + 1) * 0.5 * frameBuffer.height;
-        int p1fbx = (m_LineQueue.EndPositions[i].x   + 1) * 0.5 * frameBuffer.width;
-        int p1fby = (m_LineQueue.EndPositions[i].y   + 1) * 0.5 * frameBuffer.height;
+        int p0fbx = (m_LineQueue.StartPositions[i].x + 1) * 0.5f * (frameBuffer.width - 1);
+        int p0fby = (m_LineQueue.StartPositions[i].y + 1) * 0.5f * (frameBuffer.height - 1);
+        int p1fbx = (m_LineQueue.EndPositions[i].x   + 1) * 0.5f * (frameBuffer.width - 1);
+        int p1fby = (m_LineQueue.EndPositions[i].y   + 1) * 0.5f * (frameBuffer.height - 1);
 
         // Use bresenham's algorithm to draw the line
         // TODO: lerp the colours as well
@@ -602,7 +629,7 @@ void BezierPatchRenderWidget::ProjectGridPoints(Homogeneous4* buff, unsigned int
     }
 }
 
-bool BezierPatchRenderWidget::ClipAxial(unsigned int lineindex, int axis, float d, int inside) {
+bool BezierPatchRenderWidget::ClipAxial(unsigned int lineindex, int axis, int normal) {
     // distances of points to clip plane
     // and which side it is on
     // diff: distance between pts on axis
@@ -611,20 +638,24 @@ bool BezierPatchRenderWidget::ClipAxial(unsigned int lineindex, int axis, float 
     Homogeneous4 p1 = m_LineQueue.StartPositions[lineindex];
     Homogeneous4 p2 = m_LineQueue.EndPositions[lineindex];
 
-    d1 = (p1[axis] - d) * inside;
-    d2 = (p2[axis] - d) * inside;
+    // Distance to plane with margin
+    d1 = (normal * p1[axis]) + 1.f - std::numeric_limits<float>::epsilon();
+    d2 = (normal * p2[axis]) + 1.f - std::numeric_limits<float>::epsilon();
+
     sameside = d1 * d2;
     diff = d1 - d2;
 
     // Discard outside. plane normal faces outside ndc bounding box
-    if (sameside > 0 && d1 > 0) return true;
+    if (sameside > 0 && d1 < 0)
+        return true;
 
     // Clip if necessarry by using lerp
     if (sameside < 0) {
-        Homogeneous4 newpt = LERP(p1, p2, d1/diff);
+        float t = d1 / diff;
+        Homogeneous4 newpt = LERP(p1, p2, t);
         
         // TODO: lerp colours as well
-        if (d1 > 0) {
+        if (d1 < 0) {
             m_LineQueue.StartPositions[lineindex] = newpt;
         } else {
             m_LineQueue.EndPositions[lineindex] = newpt;
@@ -650,9 +681,14 @@ void BezierPatchRenderWidget::DrawBresenhamHoriz(int x0, int y0, int x1, int y1,
     int D = (2 * dy) - dx;
     int y = y0;
     for (int x = x0; x < x1; x++) {
-        // lol. temporary if check to stop faulty line clipping crashing the whole thing
-        if (x >= 0 && x < frameBuffer.width && y >= 0 && y < frameBuffer.height)
-            frameBuffer[y][x] = color;
+        if (x < 0 || x >= frameBuffer.width || y < 0 || y >= frameBuffer.height) {
+            std::cout <<
+                "BAD POINT! (" << x << ", " << y << ")" <<
+                "fb: (" << frameBuffer.width << ", " << frameBuffer.height << ")" <<
+                "x0 " << x0 << " y0" << y0 << " x1 " << x1 << " y1 " << y1 << std::endl;
+            continue;
+        }
+        frameBuffer[y][x] = color;
 
         if (D > 0) {
             y = y + dir;
@@ -676,8 +712,14 @@ void BezierPatchRenderWidget::DrawBresenhamVert(int x0, int y0, int x1, int y1, 
     int D = (2 * dx) - dy;
     int x = x0;
     for (int y = y0; y < y1; y++) {
-        if (x >= 0 && x < frameBuffer.width && y >= 0 && y < frameBuffer.height)
-            frameBuffer[y][x] = color;
+        if (x < 0 || x >= frameBuffer.width || y < 0 || y >= frameBuffer.height) {
+            std::cout <<
+                "BAD POINT! (" << x << ", " << y << ")" <<
+                "fb: (" << frameBuffer.width << ", " << frameBuffer.height << ")" <<
+                "x0 " << x0 << " y0 " << y0 << " x1 " << x1 << " y1 " << y1 << std::endl;
+            continue;
+        }
+        frameBuffer[y][x] = color;
 
         if (D > 0) {
             x = x + dir;
